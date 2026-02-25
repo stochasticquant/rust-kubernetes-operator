@@ -1,5 +1,7 @@
 mod cli;
 #[allow(dead_code)]
+mod crd;
+#[allow(dead_code)]
 mod governance;
 
 use clap::Parser;
