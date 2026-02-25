@@ -1,6 +1,10 @@
 mod cli;
 #[allow(dead_code)]
+mod controller;
+mod crd;
+#[allow(dead_code)]
 mod governance;
+mod reconcile;
 
 use clap::Parser;
 use cli::Cli;
