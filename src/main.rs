@@ -1,8 +1,12 @@
 mod cli;
 #[allow(dead_code)]
+mod controller;
 mod crd;
 #[allow(dead_code)]
 mod governance;
+mod reconcile;
+#[allow(dead_code)]
+mod webhook;
 
 use clap::Parser;
 use cli::Cli;
