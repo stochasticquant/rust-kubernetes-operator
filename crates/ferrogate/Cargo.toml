@@ -1,0 +1,24 @@
+[package]
+name = "ferrogate"
+description = "Ferrogate: a lightweight, Rust-native Kubernetes policy operator"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+ferrogate-crd.workspace = true
+ferrogate-operator.workspace = true
+kube.workspace = true
+serde-saphyr.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

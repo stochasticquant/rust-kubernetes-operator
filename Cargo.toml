@@ -1,15 +1,69 @@
-[package]
-name = "kube-guardian"
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.89"
+license = "Apache-2.0"
+repository = "https://github.com/stochasticquant/rust-kubernetes-operator"
+homepage = "https://github.com/stochasticquant/rust-kubernetes-operator"
+authors = ["The Ferrogate Authors"]
+keywords = ["kubernetes", "operator", "policy", "admission", "security"]
+categories = ["command-line-utilities"]
+publish = false
 
-[dependencies]
-axum = "0.8"
-clap = { version = "4.5.60", features = ["derive"] }
+[workspace.dependencies]
+# Internal crates
+ferrogate-core = { path = "crates/ferrogate-core" }
+ferrogate-crd = { path = "crates/ferrogate-crd" }
+ferrogate-operator = { path = "crates/ferrogate-operator" }
+ferrogate-webhook = { path = "crates/ferrogate-webhook" }
+
+# Kubernetes
+kube = { version = "4.2", default-features = false, features = ["client", "derive", "runtime", "rustls-tls", "ring"] }
+k8s-openapi = { version = "0.28", features = ["v1_34", "schemars"] }
+schemars = "1.2"
+
+# Runtime and HTTP
+tokio = { version = "1.54", features = ["macros", "rt-multi-thread", "signal"] }
 futures = "0.3"
-kube = { version = "0.98", features = ["runtime", "derive"] }
-k8s-openapi = { version = "0.24", features = ["latest"] }
-schemars = "0.8"
+axum = "0.8"
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
+# CLI, serialization, errors, logging
+clap = { version = "4.6", features = ["derive", "env"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["full"] }
+serde-saphyr = "2"
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+# Request paths must never panic: return errors instead.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+# Use `tracing`, not print macros.
+print_stdout = "deny"
+print_stderr = "deny"
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

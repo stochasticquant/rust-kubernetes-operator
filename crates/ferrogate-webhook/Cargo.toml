@@ -1,0 +1,21 @@
+[package]
+name = "ferrogate-webhook"
+description = "Ferrogate admission webhook HTTP handlers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+axum.workspace = true
+
+[dev-dependencies]
+http-body-util.workspace = true
+tokio.workspace = true
+tower.workspace = true
+
+[lints]
+workspace = true
