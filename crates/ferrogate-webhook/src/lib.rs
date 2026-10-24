@@ -40,8 +40,8 @@ pub use tls::TlsFiles;
 /// Default limit for an `AdmissionReview` body. Kubernetes objects are at most ~3 MiB, and a review
 /// can carry the old and the new object.
 pub const DEFAULT_MAX_BODY_BYTES: usize = 7 * 1024 * 1024;
-/// Handlers give up before the API server's webhook timeout (10 s by default).
-pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(8);
+/// Handlers give up before the API server does (`timeoutSeconds: 5` in the shipped configuration).
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(4);
 /// Maximum admission requests handled at once.
 pub const DEFAULT_CONCURRENCY: usize = 512;
 

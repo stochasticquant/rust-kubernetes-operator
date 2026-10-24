@@ -104,3 +104,32 @@ jobs:
         with:
           command: check
           arguments: --all-features
+
+  e2e:
+    name: E2E (kind)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build image
+        run: docker build -t ferrogate:dev .
+      - uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
+        with:
+          cluster_name: ferrogate
+      - name: Install cert-manager
+        run: |
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.21.1/cert-manager.yaml
+          kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
+          kubectl -n cert-manager rollout status deploy/cert-manager-cainjector --timeout=180s
+      - name: Load image
+        run: kind load docker-image ferrogate:dev --name ferrogate
+      - name: Run end-to-end tests
+        run: tests/e2e/run.sh
+      - name: Logs on failure
+        if: failure()
+        run: |
+          kubectl -n ferrogate-system get all
+          kubectl -n ferrogate-system logs deploy/ferrogate-webhook --tail=100 || true
+          kubectl -n ferrogate-system logs deploy/ferrogate-operator --tail=100 || true

@@ -7,57 +7,73 @@
 **A lightweight, Rust-native Kubernetes policy operator.** Ferrogate audits first, enforces safely,
 and compiles policies to native Kubernetes admission where it can.
 
-> **Status: early development (pre-0.1).** The project foundation is in place and the operator runs
-> against a cluster, but it does not enforce anything yet. Do not rely on it to protect a cluster.
+> **Status: pre-release (heading to `v0.1.0`).** Policies, admission and background scans work and
+> are tested end to end on a real cluster, but the API is `v1alpha1` and there is no tagged release
+> or signed image yet. Evaluate it in `Audit` mode before enforcing anything.
 > See [What works today](#what-works-today) and the [Roadmap](#roadmap).
 
 ## Why Ferrogate
 
-- **Small and fast.** One static Rust binary, no `unsafe` code, minimal container image.
+- **Small and fast.** One Rust binary, no `unsafe` code, distroless non-root image.
 - **Audit before enforce.** Policies start in `Audit` mode and report violations without blocking
-  anything. Move to `Warn`, then `Enforce`, when you are ready.
-- **Native admission first.** Planned: rules that Kubernetes can evaluate itself are compiled to
-  `ValidatingAdmissionPolicy`, so there is no webhook in the request path for them.
-- **Secure by design.** Least-privilege RBAC, fail-open by default, no telemetry, signed releases.
-  See the [security architecture](docs/SECURITY_ARCHITECTURE.md).
+  anything. Move to `Warn`, then `Enforce`, when the results look right.
+- **One engine everywhere.** Admission, background scans and the offline `ferrogate check` command
+  share the same evaluation code, so they always agree.
+- **Secure by design.** Least-privilege RBAC, HTTPS-only webhook, fail-open by default, no
+  telemetry. See the [security architecture](docs/SECURITY_ARCHITECTURE.md).
 
 ## What works today
 
-- `ClusterGatePolicy` custom resource (`ferrogate.stochasticquant.io/v1alpha1`, short name `cgp`)
-  with `mode`, `severity` and `requireLabels`
-- `ferrogate operator`: watches policies on the current cluster and logs each one; graceful shutdown
-- `ferrogate crd`: prints the CRD YAML (also committed in [`config/crd/`](config/crd/))
-- Policy engine with a first rule (required labels), fully unit-tested
-- Text or JSON logs
-- CI: formatting, lints (warnings are errors), tests, minimum Rust version, CRD drift check,
-  dependency vulnerabilities and licences (`cargo deny`), CodeQL, dependency review
+- **`ClusterGatePolicy`** (`ferrogate.stochasticquant.io/v1alpha1`, short name `cgp`) with
+  `mode`, `severity`, `match` (kinds, namespaces, label selectors), `exclude` (namespaces, labels,
+  users, groups) and `rules`. Invalid rules are rejected by the API server.
+- **15 built-in checks:** required labels and annotations, allowed registries, no `latest` tag,
+  resource limits and requests, and the Pod Security Standards baseline and restricted checks.
+  Violations name the field, for example `spec.template.spec.containers[0].image`.
+- **Admission webhook:** `Enforce` denies with a clear message, `Warn` shows a warning in
+  `kubectl`, `Audit` writes to the API server audit log. HTTPS with cert-manager, certificate
+  reloaded without restarts, request size, time and concurrency limits.
+- **Operator:** `Ready`/`Scanned` conditions, background scans of existing workloads with violation
+  counts and sample results, Kubernetes Events, exponential back-off.
+- **Policy packs:** [`pss-baseline`, `pss-restricted`, `best-practices`](policies/), each with
+  tested fixtures.
+- **`ferrogate check`:** test policies against local YAML in CI, without a cluster.
+- **Operations:** Prometheus metrics, `/healthz` and `/readyz`, JSON logs, graceful shutdown.
+- **Install:** Kustomize manifests with least-privilege RBAC, PDB, NetworkPolicy and a hardened,
+  restricted-PSS deployment.
 
-Not yet: admission webhook, enforcement, policy reports, Helm chart, container image, releases.
+Not yet: `ValidatingAdmissionPolicy` compilation, CEL rules, PolicyReports, namespaced policies,
+leader election (the operator runs as one replica), Helm chart, signed releases.
 
-## Quick start (development)
+## Quick start
 
-Requirements: Rust 1.89+ and access to a Kubernetes 1.34+ cluster (for example
-[kind](https://kind.sigs.k8s.io/)).
+Requirements: a Kubernetes 1.30+ cluster with [cert-manager](https://cert-manager.io), Docker, and
+Rust 1.89+ to build from source.
 
 ```bash
 git clone https://github.com/stochasticquant/rust-kubernetes-operator ferrogate
 cd ferrogate
-cargo test --workspace
-
-kubectl apply -f config/crd/
-kubectl apply -f config/samples/require-team-label.yaml
-cargo run -p ferrogate -- operator
+docker build -t ferrogate:dev .          # then load it into your cluster (kind load, ctr import, ...)
+kubectl apply -k tests/e2e/overlay       # installs Ferrogate using the local image
+kubectl apply -f policies/pss-restricted/policy.yaml
 ```
-
-In another terminal:
 
 ```console
 $ kubectl get cgp
-NAME                 MODE    SEVERITY   AGE
-require-team-label   Audit   Medium     5s
+NAME             MODE    SEVERITY   READY   VIOLATIONS   AGE
+pss-restricted   Audit   High       True    35           40s
 ```
 
-Remove everything with `kubectl delete -f config/samples/ -f config/crd/`.
+Full instructions, modes and settings: [docs/install.md](docs/install.md).
+
+Without a cluster:
+
+```console
+$ cargo run -p ferrogate -- check -p policies/pss-baseline policies/pss-baseline/fixtures
+FAIL  Pod default/root (policies/pss-baseline/fixtures/fail/privileged--pod.yaml)
+      pss-baseline/privileged [Audit High] container "shell" must not be privileged (spec.containers[0].securityContext.privileged)
+...
+```
 
 Example policy:
 
@@ -65,12 +81,20 @@ Example policy:
 apiVersion: ferrogate.stochasticquant.io/v1alpha1
 kind: ClusterGatePolicy
 metadata:
-  name: require-team-label
+  name: pinned-images
 spec:
-  mode: Audit        # Audit (default) | Warn | Enforce
+  mode: Enforce      # Audit (default) | Warn | Enforce
   severity: Medium   # Low | Medium | High | Critical
-  requireLabels:
-    - team
+  match:
+    resources:
+      - apiGroups: [apps]
+        kinds: [Deployment, StatefulSet]
+  exclude:
+    namespaces: [kube-system]
+  rules:
+    - name: no-latest
+      disallowLatestTag: true
+      message: "pin images to a version or digest"
 ```
 
 ## Architecture
@@ -80,16 +104,16 @@ ferrogate (binary) ──► ferrogate-operator ──► ferrogate-crd ──�
                    └─► ferrogate-webhook  ──────────────────────► ferrogate-core
 ```
 
-`ferrogate-core` holds the policy engine and has no Kubernetes I/O, so it is fast to test and can be
-reused by the webhook and a future `kubectl` plugin. Details: [`docs/architecture.md`](docs/architecture.md).
+`ferrogate-core` holds the policy engine and has no Kubernetes I/O, so it is fast to test and is
+shared by the webhook, the background scanner and `ferrogate check`. Details: [`docs/architecture.md`](docs/architecture.md).
 Design decisions: [`docs/decisions/`](docs/decisions/).
 
 ## Roadmap
 
 | Phase | Contents | Status |
 | --- | --- | --- |
-| A — Foundation | Licence, security baseline, workspace, CI, docs | in progress |
-| B — Working product | Full CRD, controller status, ValidatingAdmissionPolicy compiler, webhook with TLS, policy reports, metrics, e2e tests | planned (`v0.1.0`) |
+| A — Foundation | Licence, security baseline, workspace, CI, docs | done |
+| B — Working product | Full CRD, controller status, webhook with TLS, metrics, policy packs, e2e tests (done); ValidatingAdmissionPolicy compiler, CEL rules, policy reports (next) | in progress (`v0.1.0`) |
 | C — Enterprise readiness | Hardened image, Helm chart, signed releases, SBOM, provenance, HA | planned (`v0.5.0`) |
 | D — Community | Docs site, policy packs (PSS, CIS, NSA), benchmarks | planned |
 | E — Advanced | Multi-cluster compliance, mutation, exceptions, WASM plugins | after 1.0 |

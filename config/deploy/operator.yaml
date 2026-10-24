@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ferrogate-operator
+  namespace: ferrogate-system
+  labels: {app.kubernetes.io/name: ferrogate, app.kubernetes.io/component: operator}
+spec:
+  # One replica until leader election lands; Recreate avoids two controllers during rollouts.
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/name: ferrogate, app.kubernetes.io/component: operator}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: ferrogate, app.kubernetes.io/component: operator}
+    spec:
+      serviceAccountName: ferrogate-operator
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: operator
+          image: ghcr.io/stochasticquant/ferrogate:0.1.0
+          args: [operator, --log-format=json]
+          env:
+            - name: POD_NAME
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+          ports: [{name: metrics, containerPort: 8080}]
+          livenessProbe: {httpGet: {path: /healthz, port: metrics}, periodSeconds: 20}
+          readinessProbe: {httpGet: {path: /readyz, port: metrics}, periodSeconds: 10}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities: {drop: [ALL]}
