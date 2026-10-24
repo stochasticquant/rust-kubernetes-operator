@@ -1,0 +1,7 @@
+# Excluded namespace: privileged system pods are not evaluated.
+apiVersion: v1
+kind: Pod
+metadata: {name: kube-proxy, namespace: kube-system}
+spec:
+  hostNetwork: true
+  containers: [{name: proxy, image: registry.k8s.io/kube-proxy:v1.34.0, securityContext: {privileged: true}}]

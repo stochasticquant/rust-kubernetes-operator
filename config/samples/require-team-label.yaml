@@ -1,4 +1,4 @@
-# Example policy: every matched resource must carry a `team` label.
+# Example policy: Deployments and StatefulSets must carry a `team` label.
 # Audit mode only reports violations; nothing is blocked.
 apiVersion: ferrogate.stochasticquant.io/v1alpha1
 kind: ClusterGatePolicy
@@ -7,5 +7,16 @@ metadata:
 spec:
   mode: Audit
   severity: Medium
-  requireLabels:
-    - team
+  match:
+    resources:
+      - apiGroups: [apps]
+        kinds: [Deployment, StatefulSet]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [kube-system, kube-public, kube-node-lease]
+  rules:
+    - name: team-label
+      requireLabels: [team]
+      message: "add a team label so the owning team can be found"

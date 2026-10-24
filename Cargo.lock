@@ -543,10 +543,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "ferrogate-core",
  "ferrogate-crd",
  "ferrogate-operator",
  "kube",
  "serde-saphyr 2.0.0",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -559,6 +561,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]

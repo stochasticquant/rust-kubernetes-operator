@@ -1,0 +1,27 @@
+# Workload best practices: pinned images and resource settings.
+apiVersion: ferrogate.stochasticquant.io/v1alpha1
+kind: ClusterGatePolicy
+metadata:
+  name: best-practices
+  annotations:
+    ferrogate.stochasticquant.io/pack: best-practices
+spec:
+  mode: Audit
+  severity: Medium
+  match:
+    resources:
+      - apiGroups: [""]
+        kinds: [Pod, ReplicationController]
+      - apiGroups: [apps]
+        kinds: [Deployment, StatefulSet, DaemonSet, ReplicaSet]
+      - apiGroups: [batch]
+        kinds: [Job, CronJob]
+  exclude:
+    namespaces: [kube-system]
+  rules:
+    - name: no-latest-tag
+      disallowLatestTag: true
+    - name: memory-limits
+      requireResourceLimits: [memory]
+    - name: requests
+      requireResourceRequests: [cpu, memory]

@@ -53,8 +53,8 @@ pub async fn run(client: Client) {
 async fn reconcile(policy: Arc<ClusterGatePolicy>, _ctx: Arc<Context>) -> Result<Action, Error> {
     tracing::info!(
         policy = %policy.name_any(),
-        mode = ?policy.spec.mode,
-        severity = ?policy.spec.severity,
+        mode = ?policy.spec.policy.mode,
+        severity = ?policy.spec.policy.severity,
         "reconciling policy"
     );
     Ok(Action::requeue(RESYNC))

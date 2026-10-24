@@ -3,6 +3,8 @@
 //! The `ferrogate` binary.
 
 use std::io::Write;
+use std::path::PathBuf;
+use std::process::ExitCode;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand, ValueEnum};
@@ -26,6 +28,24 @@ enum Command {
     Operator,
     /// Print the custom resource definitions as YAML.
     Crd,
+    /// Check local YAML files against policies, without a cluster. Exits with 1 if any check fails.
+    Check {
+        /// Policy files or directories (`ClusterGatePolicy` documents).
+        #[arg(short, long = "policy", required = true)]
+        policies: Vec<PathBuf>,
+        /// Resource files or directories to check.
+        #[arg(required = true)]
+        resources: Vec<PathBuf>,
+        /// Report format.
+        #[arg(short, long, value_enum, default_value_t = Output::Text)]
+        output: Output,
+    },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum Output {
+    Text,
+    Json,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -35,11 +55,16 @@ enum LogFormat {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> anyhow::Result<ExitCode> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Crd => print_crds(),
+        Command::Crd => print_crds().map(|()| ExitCode::SUCCESS),
+        Command::Check {
+            policies,
+            resources,
+            output,
+        } => check(&policies, &resources, output),
         Command::Operator => {
             init_logging(cli.log_format);
             tracing::info!(
@@ -50,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
                 .await
                 .context("could not connect to Kubernetes (check kubeconfig or service account)")?;
             ferrogate_operator::run(client).await;
-            Ok(())
+            Ok(ExitCode::SUCCESS)
         }
     }
 }
@@ -62,6 +87,27 @@ fn print_crds() -> anyhow::Result<()> {
     writeln!(out, "---")?;
     write!(out, "{yaml}")?;
     Ok(())
+}
+
+fn check(policies: &[PathBuf], resources: &[PathBuf], output: Output) -> anyhow::Result<ExitCode> {
+    use ferrogate::check;
+    let policy_docs = check::load(policies)?;
+    let compiled = check::policies(&policy_docs)?;
+    if compiled.is_empty() {
+        anyhow::bail!("no ClusterGatePolicy found in the --policy paths");
+    }
+    let documents = check::load(resources)?;
+    let results = check::run(&compiled, &documents);
+    let report = match output {
+        Output::Text => check::text_report(&results, compiled.len()),
+        Output::Json => format!("{:#}\n", check::json_report(&results)),
+    };
+    std::io::stdout().lock().write_all(report.as_bytes())?;
+    Ok(if results.iter().any(check::Checked::failed) {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    })
 }
 
 fn init_logging(format: LogFormat) {

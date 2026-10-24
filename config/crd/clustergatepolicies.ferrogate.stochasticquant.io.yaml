@@ -7,6 +7,8 @@ metadata:
 spec:
   group: ferrogate.stochasticquant.io
   names:
+    categories:
+    - ferrogate
     kind: ClusterGatePolicy
     plural: clustergatepolicies
     shortNames:
@@ -21,6 +23,12 @@ spec:
     - jsonPath: .spec.severity
       name: Severity
       type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .status.violations
+      name: Violations
+      type: integer
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -32,6 +40,181 @@ spec:
           spec:
             description: A cluster-wide policy that Ferrogate audits or enforces.
             properties:
+              exclude:
+                description: Resources and requesters to skip.
+                nullable: true
+                properties:
+                  groups:
+                    description: Skip requests from members of these groups (admission only).
+                    items:
+                      type: string
+                    maxItems: 256
+                    type: array
+                  namespaces:
+                    description: Namespaces to skip.
+                    items:
+                      type: string
+                    maxItems: 256
+                    type: array
+                  objectSelector:
+                    description: Skip resources whose labels match this selector.
+                    nullable: true
+                    properties:
+                      matchExpressions:
+                        description: Every expression must be true.
+                        items:
+                          description: One expression of a label selector.
+                          properties:
+                            key:
+                              type: string
+                            operator:
+                              enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                              type: string
+                            values:
+                              description: Values for `In` and `NotIn`. Must be empty for `Exists` and `DoesNotExist`.
+                              items:
+                                type: string
+                              maxItems: 64
+                              type: array
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        maxItems: 32
+                        type: array
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: Every key/value pair must be present.
+                        type: object
+                    type: object
+                  usernames:
+                    description: >-
+                      Skip requests from these users (admission only; background scans have no
+                      requester).
+                    items:
+                      type: string
+                    maxItems: 256
+                    type: array
+                type: object
+              match:
+                description: Which resources the policy applies to.
+                properties:
+                  namespaceSelector:
+                    description: |-
+                      Only namespaces whose labels match. Cluster-scoped resources (other than Namespaces
+                      themselves) never match when this is set.
+                    nullable: true
+                    properties:
+                      matchExpressions:
+                        description: Every expression must be true.
+                        items:
+                          description: One expression of a label selector.
+                          properties:
+                            key:
+                              type: string
+                            operator:
+                              enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                              type: string
+                            values:
+                              description: Values for `In` and `NotIn`. Must be empty for `Exists` and `DoesNotExist`.
+                              items:
+                                type: string
+                              maxItems: 64
+                              type: array
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        maxItems: 32
+                        type: array
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: Every key/value pair must be present.
+                        type: object
+                    type: object
+                  namespaces:
+                    description: >-
+                      Only these namespaces. Empty means all. Cluster-scoped resources never match a
+                      non-empty list.
+                    items:
+                      type: string
+                    maxItems: 256
+                    type: array
+                  objectSelector:
+                    description: Only resources whose own labels match.
+                    nullable: true
+                    properties:
+                      matchExpressions:
+                        description: Every expression must be true.
+                        items:
+                          description: One expression of a label selector.
+                          properties:
+                            key:
+                              type: string
+                            operator:
+                              enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                              type: string
+                            values:
+                              description: Values for `In` and `NotIn`. Must be empty for `Exists` and `DoesNotExist`.
+                              items:
+                                type: string
+                              maxItems: 64
+                              type: array
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        maxItems: 32
+                        type: array
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: Every key/value pair must be present.
+                        type: object
+                    type: object
+                  resources:
+                    description: |-
+                      Resource kinds to check. At least one entry is required, so a policy never applies to
+                      every kind in the cluster by accident.
+                    items:
+                      description: A set of kinds, optionally limited to API groups.
+                      properties:
+                        apiGroups:
+                          description: API groups, for example `""` (core) or `"apps"`. Empty or `"*"` means any group.
+                          items:
+                            type: string
+                          maxItems: 32
+                          type: array
+                        kinds:
+                          description: Kinds, for example `Pod` or `Deployment`. `"*"` means any kind.
+                          items:
+                            type: string
+                          maxItems: 64
+                          minItems: 1
+                          type: array
+                      required:
+                      - kinds
+                      type: object
+                    maxItems: 32
+                    minItems: 1
+                    type: array
+                required:
+                - resources
+                type: object
               mode:
                 default: Audit
                 description: "`Audit` (default) only reports, `Warn` allows with a warning, `Enforce` denies."
@@ -40,10 +223,120 @@ spec:
                 - Warn
                 - Enforce
                 type: string
-              requireLabels:
-                description: Labels every matched resource must carry.
+              rules:
+                description: The checks. A resource passes only if it passes every rule.
                 items:
-                  type: string
+                  description: >-
+                    One rule of a policy, as written by the user. Exactly one check field must be
+                    set.
+                  properties:
+                    allowedCapabilities:
+                      description: Containers may only add these Linux capabilities. An empty list allows none.
+                      items:
+                        type: string
+                      maxItems: 64
+                      nullable: true
+                      type: array
+                    allowedRegistries:
+                      description: |-
+                        Every container image must come from one of these registries or registry paths,
+                        for example `ghcr.io/acme` or `registry.k8s.io`.
+                      items:
+                        type: string
+                      maxItems: 128
+                      minItems: 1
+                      nullable: true
+                      type: array
+                    disallowHostNamespaces:
+                      description: Pods must not use the host network, PID or IPC namespaces. (baseline)
+                      nullable: true
+                      type: boolean
+                    disallowHostPath:
+                      description: Pods must not mount `hostPath` volumes. (baseline)
+                      nullable: true
+                      type: boolean
+                    disallowHostPorts:
+                      description: Containers must not use host ports. (baseline)
+                      nullable: true
+                      type: boolean
+                    disallowLatestTag:
+                      description: >-
+                        Images must not use the `latest` tag, or no tag at all. Digests are always
+                        allowed.
+                      nullable: true
+                      type: boolean
+                    disallowPrivilegeEscalation:
+                      description: "Containers must set `allowPrivilegeEscalation: false`. (restricted)"
+                      nullable: true
+                      type: boolean
+                    disallowPrivileged:
+                      description: "Containers must not be privileged. (Pod Security Standards: baseline)"
+                      nullable: true
+                      type: boolean
+                    message:
+                      description: Optional message shown instead of the built-in one.
+                      maxLength: 1024
+                      nullable: true
+                      type: string
+                    name:
+                      description: Unique name within the policy, used in reports and messages.
+                      maxLength: 63
+                      minLength: 1
+                      type: string
+                    requireAnnotations:
+                      description: The resource must carry every listed annotation.
+                      items:
+                        type: string
+                      maxItems: 128
+                      minItems: 1
+                      nullable: true
+                      type: array
+                    requireDropAllCapabilities:
+                      description: Containers must drop `ALL` capabilities. (restricted)
+                      nullable: true
+                      type: boolean
+                    requireLabels:
+                      description: The resource must carry every listed label.
+                      items:
+                        type: string
+                      maxItems: 128
+                      minItems: 1
+                      nullable: true
+                      type: array
+                    requireResourceLimits:
+                      description: Every container must set these resource limits, for example `["cpu", "memory"]`.
+                      items:
+                        type: string
+                      maxItems: 16
+                      minItems: 1
+                      nullable: true
+                      type: array
+                    requireResourceRequests:
+                      description: Every container must set these resource requests.
+                      items:
+                        type: string
+                      maxItems: 16
+                      minItems: 1
+                      nullable: true
+                      type: array
+                    requireRunAsNonRoot:
+                      description: "Containers must run as non-root (`runAsNonRoot: true`, pod or container level). (restricted)"
+                      nullable: true
+                      type: boolean
+                    requireSeccompProfile:
+                      description: >-
+                        A seccomp profile of type `RuntimeDefault` or `Localhost` must be set.
+                        (restricted)
+                      nullable: true
+                      type: boolean
+                  required:
+                  - name
+                  type: object
+                  x-kubernetes-validations:
+                  - message: exactly one check must be set per rule
+                    rule: "[has(self.requireLabels), has(self.requireAnnotations), has(self.allowedRegistries), has(self.disallowLatestTag), has(self.requireResourceLimits), has(self.requireResourceRequests), has(self.disallowPrivileged), has(self.disallowHostNamespaces), has(self.disallowHostPath), has(self.disallowHostPorts), has(self.allowedCapabilities), has(self.disallowPrivilegeEscalation), has(self.requireRunAsNonRoot), has(self.requireDropAllCapabilities), has(self.requireSeccompProfile)].filter(x, x).size() == 1"
+                maxItems: 64
+                minItems: 1
                 type: array
               severity:
                 default: Medium
@@ -54,13 +347,16 @@ spec:
                 - High
                 - Critical
                 type: string
+            required:
+            - match
+            - rules
             type: object
           status:
-            description: Observed state of a `ClusterGatePolicy`, written by the operator.
+            description: Observed state of a policy, written by the operator.
             nullable: true
             properties:
               conditions:
-                description: Standard Kubernetes conditions, for example `Ready`.
+                description: Standard conditions. `Ready` is `True` when the policy is valid and active.
                 items:
                   description: >-
                     Condition contains details for one aspect of the current state of this API
@@ -107,8 +403,51 @@ spec:
                   - type
                   type: object
                 type: array
+              lastScanTime:
+                description: When the last background scan finished (RFC 3339).
+                nullable: true
+                type: string
               observedGeneration:
                 description: The `metadata.generation` this status describes.
+                format: int64
+                nullable: true
+                type: integer
+              results:
+                description: Up to 20 failing resources from the last scan, for quick inspection.
+                items:
+                  description: One failing resource found by a background scan.
+                  properties:
+                    apiVersionKind:
+                      description: "`group/version/Kind`, for example `apps/v1/Deployment`."
+                      type: string
+                    message:
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      nullable: true
+                      type: string
+                    path:
+                      nullable: true
+                      type: string
+                    rule:
+                      type: string
+                  required:
+                  - apiVersionKind
+                  - message
+                  - name
+                  - rule
+                  type: object
+                type: array
+              scanned:
+                description: Number of existing resources the last scan evaluated.
+                format: int64
+                nullable: true
+                type: integer
+              violations:
+                description: >-
+                  Number of existing resources that fail the policy, from the last background
+                  scan.
                 format: int64
                 nullable: true
                 type: integer
