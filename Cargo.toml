@@ -30,8 +30,12 @@ schemars = "1.2"
 tokio = { version = "1.54", features = ["macros", "rt-multi-thread", "signal"] }
 futures = "0.3"
 axum = "0.8"
-tower = { version = "0.5", features = ["util"] }
+tower = { version = "0.5", features = ["limit", "util"] }
+tower-http = { version = "0.7", features = ["limit", "timeout"] }
 http-body-util = "0.1"
+axum-server = { version = "0.8", features = ["tls-rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+prometheus-client = "0.25"
 
 # CLI, serialization, errors, logging
 clap = { version = "4.6", features = ["derive", "env"] }
