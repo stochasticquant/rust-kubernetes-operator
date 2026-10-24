@@ -1,0 +1,35 @@
+name: Policy request
+description: Propose a policy for the built-in policy packs.
+labels: [policy, triage]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Policy name
+      placeholder: disallow-host-path
+    validations:
+      required: true
+  - type: textarea
+    id: rule
+    attributes:
+      label: What should the policy check?
+    validations:
+      required: true
+  - type: input
+    id: reference
+    attributes:
+      label: Standard or benchmark it comes from
+      placeholder: "Pod Security Standards (restricted), CIS 5.2.4, NSA/CISA hardening guide"
+  - type: textarea
+    id: examples
+    attributes:
+      label: Example manifests
+      description: One manifest that should pass and one that should fail.
+      render: yaml
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Suggested severity
+      options: [Low, Medium, High, Critical]
