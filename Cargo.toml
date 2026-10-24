@@ -39,6 +39,8 @@ prometheus-client = "0.25"
 
 # Testing
 proptest = { version = "1.12", default-features = false, features = ["std"] }
+tower-test = "0.4"
+http = "1"
 
 # CLI, serialization, errors, logging
 clap = { version = "4.6", features = ["derive", "env"] }
