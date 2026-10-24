@@ -2,6 +2,7 @@
 
 Ferrogate is a Kubernetes policy operator written in Rust. One binary, `ferrogate`, runs as two
 Deployments: the **operator** (policy status and background scans) and the **webhook** (admission).
+Both run two replicas: webhook replicas are stateless, operator replicas elect a leader.
 The code is a Cargo workspace whose crates have strict dependency rules.
 
 ```text
@@ -34,7 +35,7 @@ Why this split: [decision 0002](decisions/0002-workspace-layout.md).
                  ┌──────────────────────── kube-apiserver ────────────────────────┐
                  │ AdmissionReview (HTTPS)               watch / list / status    │
                  ▼                                              ▲                 │
- ferrogate-webhook (2 replicas)                       ferrogate-operator (1)      │
+ ferrogate-webhook (2 replicas)                       ferrogate-operator (2, 1 leader)
    caches: policies (compiled), namespace labels        reconcile ClusterGatePolicy
    POST /validate → decide() → allow / warn / deny      validate → scan → status, Events
    :8080 /healthz /readyz /metrics                      :8080 /healthz /readyz /metrics
@@ -50,6 +51,10 @@ Why this split: [decision 0002](decisions/0002-workspace-layout.md).
   through their owner), write `status` and metrics. Work is skipped while `observedGeneration` is
   current and the last scan is newer than the scan interval, so status writes do not loop.
   Errors back off exponentially per policy (5 s to 5 min).
+- **Leader election.** Operator replicas compete for the `coordination.k8s.io` Lease
+  `ferrogate-operator` (15 s duration, renewed every 2 s). Only the leader runs the controller; a
+  leader that cannot renew for 10 s exits, so it never acts alongside a new leader. On SIGTERM the
+  leader releases the Lease and a standby takes over in about 2 seconds.
 - **Shutdown.** SIGTERM stops accepting connections and drains in-flight requests (10 s).
 
 ## Commands

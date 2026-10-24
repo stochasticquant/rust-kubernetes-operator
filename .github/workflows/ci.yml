@@ -105,6 +105,33 @@ jobs:
           command: check
           arguments: --all-features
 
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: "1.99"
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        with:
+          tool: cargo-llvm-cov
+      - name: Measure line coverage
+        run: |
+          cargo llvm-cov --workspace --locked --summary-only | tee coverage.txt
+          {
+            echo '### Line coverage'
+            echo '```'
+            cat coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Engine coverage must stay above 80%
+        run: cargo llvm-cov --package ferrogate-core --locked --fail-under-lines 80 --summary-only
+
   e2e:
     name: E2E (kind)
     runs-on: ubuntu-latest

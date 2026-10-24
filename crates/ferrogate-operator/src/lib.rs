@@ -7,6 +7,7 @@
 //! It also provides the watch caches the admission webhook reads ([`cache::Caches`]).
 
 pub mod cache;
+pub mod leader;
 pub mod metrics;
 pub mod scan;
 

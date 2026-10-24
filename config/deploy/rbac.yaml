@@ -91,3 +91,26 @@ metadata:
   name: ferrogate-webhook
 roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: ferrogate-webhook}
 subjects: [{kind: ServiceAccount, name: ferrogate-webhook, namespace: ferrogate-system}]
+---
+# Leader election: only the operator's own Lease, only in its namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ferrogate-operator-leader
+  namespace: ferrogate-system
+rules:
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [create]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    resourceNames: [ferrogate-operator]
+    verbs: [get, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ferrogate-operator-leader
+  namespace: ferrogate-system
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: ferrogate-operator-leader}
+subjects: [{kind: ServiceAccount, name: ferrogate-operator, namespace: ferrogate-system}]

@@ -5,9 +5,8 @@ metadata:
   namespace: ferrogate-system
   labels: {app.kubernetes.io/name: ferrogate, app.kubernetes.io/component: operator}
 spec:
-  # One replica until leader election lands; Recreate avoids two controllers during rollouts.
-  replicas: 1
-  strategy: {type: Recreate}
+  # Two replicas; a Lease elects the one that reconciles, the other takes over within ~15 s.
+  replicas: 2
   selector:
     matchLabels: {app.kubernetes.io/name: ferrogate, app.kubernetes.io/component: operator}
   template:
@@ -15,16 +14,28 @@ spec:
       labels: {app.kubernetes.io/name: ferrogate, app.kubernetes.io/component: operator}
     spec:
       serviceAccountName: ferrogate-operator
+      # A deposed leader exits at once; a short grace period speeds up hand-over on rollouts.
+      terminationGracePeriodSeconds: 15
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels: {app.kubernetes.io/name: ferrogate, app.kubernetes.io/component: operator}
       securityContext:
         runAsNonRoot: true
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: operator
           image: ghcr.io/stochasticquant/ferrogate:0.1.0
-          args: [operator, --log-format=json]
+          args: [operator, --leader-elect, --log-format=json]
           env:
             - name: POD_NAME
               valueFrom: {fieldRef: {fieldPath: metadata.name}}
+            - name: POD_NAMESPACE
+              valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
           ports: [{name: metrics, containerPort: 8080}]
           livenessProbe: {httpGet: {path: /healthz, port: metrics}, periodSeconds: 20}
           readinessProbe: {httpGet: {path: /readyz, port: metrics}, periodSeconds: 10}
@@ -36,3 +47,13 @@ spec:
             readOnlyRootFilesystem: true
             runAsNonRoot: true
             capabilities: {drop: [ALL]}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ferrogate-operator
+  namespace: ferrogate-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: ferrogate, app.kubernetes.io/component: operator}

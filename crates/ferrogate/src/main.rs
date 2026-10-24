@@ -61,6 +61,12 @@ struct OperatorArgs {
     /// Maximum resources evaluated per policy and scan.
     #[arg(long, default_value_t = 20_000, env = "FERROGATE_MAX_SCAN_OBJECTS")]
     max_scan_objects: usize,
+    /// Elect a leader through a Lease so several replicas can run. Needs `POD_NAME`.
+    #[arg(long, env = "FERROGATE_LEADER_ELECT")]
+    leader_elect: bool,
+    /// Namespace of the leader election Lease.
+    #[arg(long, env = "POD_NAMESPACE", default_value = "ferrogate-system")]
+    lease_namespace: String,
 }
 
 #[derive(Args)]
@@ -119,7 +125,17 @@ async fn main() -> anyhow::Result<ExitCode> {
                 instance: std::env::var("POD_NAME").ok(),
                 ..ferrogate_operator::Config::default()
             };
-            serve::operator(client, config, args.metrics_addr).await?;
+            let lease = if args.leader_elect {
+                let identity = std::env::var("POD_NAME")
+                    .context("--leader-elect needs the POD_NAME environment variable")?;
+                Some(ferrogate_operator::leader::LeaseConfig::new(
+                    args.lease_namespace,
+                    identity,
+                ))
+            } else {
+                None
+            };
+            serve::operator(client, config, args.metrics_addr, lease).await?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Webhook(args) => {

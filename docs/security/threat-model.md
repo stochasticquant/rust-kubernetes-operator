@@ -56,7 +56,7 @@ tests can refer to it. **Status** says whether the mitigation exists in the code
 | T-01 | S | A pod calls the webhook directly to probe or confuse it | Webhook decisions only take effect when the API server asks; NetworkPolicy limits ingress to the two ports. Restricting sources to the control plane depends on the CNI | ✅ ports / 🟡 C sources |
 | T-02 | T / I | Traffic between API server and webhook is read or changed | HTTPS only (rustls with `ring`, TLS 1.2/1.3); cert-manager certificate (ECDSA P-256, 90 days, key rotated on renewal) reloaded from disk without restart | ✅ |
 | T-03 | D | Huge or deeply nested objects exhaust webhook memory or CPU | 7 MiB body limit, 4 s handler timeout (the API server waits 5 s), 512 concurrent requests, bounded list sizes in policies | ✅ |
-| T-04 | D | Malformed `AdmissionReview` crashes the webhook | No `unwrap`/`expect`/`panic` outside tests (lint-enforced); typed parsing; fuzzing | ✅ lints / 🟡 B fuzzing |
+| T-04 | D | Malformed `AdmissionReview` crashes the webhook | No `unwrap`/`expect`/`panic` outside tests (lint-enforced); typed parsing; property tests feed random bytes, random reviews and random workload-shaped objects to the endpoint and engine | ✅ |
 | T-05 | D | Webhook outage blocks all deployments | `failurePolicy: Ignore`; `kube-system`, `kube-node-lease` and `ferrogate-system` excluded; 2 replicas with anti-affinity and a PDB; only workload kinds are intercepted | ✅ |
 | T-06 | E | Webhook allows requests before it knows the policies | Until the policy and namespace caches have synced, `/validate` answers 503 so the API server applies the configured `failurePolicy`, and `/readyz` keeps the pod out of the Service | ✅ |
 
@@ -69,6 +69,7 @@ tests can refer to it. **Status** says whether the mitigation exists in the code
 | T-12 | T | Operator connects to a spoofed API server | rustls certificate verification against the cluster CA; no option to skip verification in production paths | ✅ |
 | T-13 | D | Reconcile errors cause a hot loop against the API server | Per-policy exponential back-off (5 s to 5 min); status writes do not re-trigger work; scans paginated (500) and capped (20 000 objects) | ✅ |
 | T-14 | R | Changes made by the operator cannot be traced | Kubernetes Events on transitions; the operator only writes policy status. Generated objects (VAP) will be labelled and owner-referenced | ✅ / 🟡 B VAP |
+| T-15 | T | Two operator replicas act at once (split brain) | Lease-based leader election; a leader that cannot renew within 10 s exits before the 15 s lease can be taken over; the operator only writes policy status | ✅ |
 
 ### 4.3 TB-3: policy authors → cluster
 

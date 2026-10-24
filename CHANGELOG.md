@@ -29,6 +29,8 @@ All notable changes to Ferrogate are listed here. The format follows
 - Container image (distroless, non-root) and Kustomize install in `config/deploy/` with
   least-privilege RBAC, PDB, NetworkPolicy and a cert-manager certificate.
 - End-to-end test script in `tests/e2e/`.
+- Leader election through a Lease (`--leader-elect`); the manifests run two operator replicas.
+- Property-based robustness tests for the engine and the admission endpoint; coverage report in CI.
 - `ferrogate crd` prints the custom resource definitions; the generated YAML is in `config/crd/`.
 - Structured logging with text or JSON output (`--log-format`, `FERROGATE_LOG` for the level).
 - Apache-2.0 licence, security policy, contributing guide, code of conduct and governance.
