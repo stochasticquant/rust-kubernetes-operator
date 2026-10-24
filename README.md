@@ -1,142 +1,113 @@
-# kube-guardian
+# Ferrogate
 
-A Rust-based Kubernetes governance operator that enforces security policies across clusters through custom resources, admission webhooks, and multi-cluster coordination.
+[![CI](https://github.com/stochasticquant/rust-kubernetes-operator/actions/workflows/ci.yml/badge.svg)](https://github.com/stochasticquant/rust-kubernetes-operator/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/stochasticquant/rust-kubernetes-operator/actions/workflows/codeql.yml/badge.svg)](https://github.com/stochasticquant/rust-kubernetes-operator/actions/workflows/codeql.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-## Overview
+**A lightweight, Rust-native Kubernetes policy operator.** Ferrogate audits first, enforces safely,
+and compiles policies to native Kubernetes admission where it can.
 
-kube-guardian is a Kubernetes operator built in Rust that provides:
+> **Status: early development (pre-0.1).** The project foundation is in place and the operator runs
+> against a cluster, but it does not enforce anything yet. Do not rely on it to protect a cluster.
+> See [What works today](#what-works-today) and the [Roadmap](#roadmap).
 
-- **Policy-as-Code governance** — Define and enforce security policies as Kubernetes custom resources
-- **Admission control** — Validate and reject non-compliant workloads before they run
-- **Multi-cluster support** — Aggregate compliance across multiple Kubernetes clusters
-- **Production observability** — Structured logging, Prometheus metrics, and health checks
+## Why Ferrogate
+
+- **Small and fast.** One static Rust binary, no `unsafe` code, minimal container image.
+- **Audit before enforce.** Policies start in `Audit` mode and report violations without blocking
+  anything. Move to `Warn`, then `Enforce`, when you are ready.
+- **Native admission first.** Planned: rules that Kubernetes can evaluate itself are compiled to
+  `ValidatingAdmissionPolicy`, so there is no webhook in the request path for them.
+- **Secure by design.** Least-privilege RBAC, fail-open by default, no telemetry, signed releases.
+  See the [security architecture](docs/SECURITY_ARCHITECTURE.md).
+
+## What works today
+
+- `ClusterGatePolicy` custom resource (`ferrogate.stochasticquant.io/v1alpha1`, short name `cgp`)
+  with `mode`, `severity` and `requireLabels`
+- `ferrogate operator`: watches policies on the current cluster and logs each one; graceful shutdown
+- `ferrogate crd`: prints the CRD YAML (also committed in [`config/crd/`](config/crd/))
+- Policy engine with a first rule (required labels), fully unit-tested
+- Text or JSON logs
+- CI: formatting, lints (warnings are errors), tests, minimum Rust version, CRD drift check,
+  dependency vulnerabilities and licences (`cargo deny`), CodeQL, dependency review
+
+Not yet: admission webhook, enforcement, policy reports, Helm chart, container image, releases.
+
+## Quick start (development)
+
+Requirements: Rust 1.89+ and access to a Kubernetes 1.34+ cluster (for example
+[kind](https://kind.sigs.k8s.io/)).
+
+```bash
+git clone https://github.com/stochasticquant/rust-kubernetes-operator ferrogate
+cd ferrogate
+cargo test --workspace
+
+kubectl apply -f config/crd/
+kubectl apply -f config/samples/require-team-label.yaml
+cargo run -p ferrogate -- operator
+```
+
+In another terminal:
+
+```console
+$ kubectl get cgp
+NAME                 MODE    SEVERITY   AGE
+require-team-label   Audit   Medium     5s
+```
+
+Remove everything with `kubectl delete -f config/samples/ -f config/crd/`.
+
+Example policy:
+
+```yaml
+apiVersion: ferrogate.stochasticquant.io/v1alpha1
+kind: ClusterGatePolicy
+metadata:
+  name: require-team-label
+spec:
+  mode: Audit        # Audit (default) | Warn | Enforce
+  severity: Medium   # Low | Medium | High | Critical
+  requireLabels:
+    - team
+```
 
 ## Architecture
 
-```
-kube-guardian/
-├── src/
-│   ├── main.rs              # Entry point and orchestration
-│   ├── cli.rs               # CLI argument parsing (clap)
-│   ├── config.rs            # Configuration management
-│   ├── crd.rs               # CustomResourceDefinition (GuardianPolicy)
-│   ├── controller.rs        # Kubernetes controller wiring
-│   ├── reconcile.rs         # Reconciliation business logic
-│   ├── webhook.rs           # Admission webhook HTTP server
-│   ├── metrics.rs           # Prometheus metrics and health checks
-│   ├── multi_cluster.rs     # Multi-cluster coordination
-│   └── governance/
-│       ├── mod.rs           # Governance module declarations
-│       ├── policies.rs      # Policy data structures
-│       └── traits.rs        # PolicyEvaluator trait and implementations
-├── tests/
-│   └── integration.rs       # Integration tests
-├── docs/                    # Project documentation and guides
-├── Dockerfile               # Multi-stage container build
-└── helm/                    # Helm chart for deployment
+```text
+ferrogate (binary) ──► ferrogate-operator ──► ferrogate-crd ──► ferrogate-core
+                   └─► ferrogate-webhook  ──────────────────────► ferrogate-core
 ```
 
-## Features
+`ferrogate-core` holds the policy engine and has no Kubernetes I/O, so it is fast to test and can be
+reused by the webhook and a future `kubectl` plugin. Details: [`docs/architecture.md`](docs/architecture.md).
+Design decisions: [`docs/decisions/`](docs/decisions/).
 
-### Custom Resource Definition
+## Roadmap
 
-kube-guardian defines a `GuardianPolicy` CRD under the `guardian.io` API group:
+| Phase | Contents | Status |
+| --- | --- | --- |
+| A — Foundation | Licence, security baseline, workspace, CI, docs | in progress |
+| B — Working product | Full CRD, controller status, ValidatingAdmissionPolicy compiler, webhook with TLS, policy reports, metrics, e2e tests | planned (`v0.1.0`) |
+| C — Enterprise readiness | Hardened image, Helm chart, signed releases, SBOM, provenance, HA | planned (`v0.5.0`) |
+| D — Community | Docs site, policy packs (PSS, CIS, NSA), benchmarks | planned |
+| E — Advanced | Multi-cluster compliance, mutation, exceptions, WASM plugins | after 1.0 |
 
-```yaml
-apiVersion: guardian.io/v1
-kind: GuardianPolicy
-metadata:
-  name: require-labels
-spec:
-  severity: High
-```
+The full plan: [`docs/ENTERPRISE_PLAN.md`](docs/ENTERPRISE_PLAN.md). Changes per version:
+[`CHANGELOG.md`](CHANGELOG.md).
 
-### Admission Webhook
+## Security
 
-A validating admission webhook intercepts resource creation and modification requests, evaluating them against active `GuardianPolicy` resources. Non-compliant workloads are rejected with descriptive error messages.
+Ferrogate sits in the path of changes to your cluster, so security comes first. Read the
+[security architecture](docs/SECURITY_ARCHITECTURE.md) and [threat model](docs/security/threat-model.md).
+Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
-### Controller & Reconciliation
+## Contributing
 
-The operator follows the standard Kubernetes controller pattern:
+Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md). How the project is run: [GOVERNANCE.md](GOVERNANCE.md).
 
-- Watches `GuardianPolicy` resources for changes
-- Reconciles desired state with actual cluster state
-- Handles finalizers for clean resource lifecycle management
-- Requeues with configurable backoff on transient failures
+## Licence
 
-### Observability
-
-- **Structured logging** via `tracing` with span context
-- **Prometheus metrics** exposed at `/metrics` (reconciliation counts, latencies)
-- **Health endpoints** for readiness and liveness probes
-
-### Multi-Cluster
-
-Supports loading multiple kubeconfigs to coordinate governance policies across clusters, aggregating compliance results into a unified view.
-
-## Prerequisites
-
-- [Rust](https://www.rust-lang.org/tools/install) 1.75+
-- A Kubernetes cluster (for phases 3+)
-- [kubectl](https://kubernetes.io/docs/tasks/tools/) configured with cluster access
-
-## Getting Started
-
-### Build
-
-```sh
-cargo build --release
-```
-
-### Run (CLI mode)
-
-```sh
-cargo run -- --config path/to/config.json
-```
-
-### Run Tests
-
-```sh
-cargo test
-```
-
-### Deploy to Kubernetes
-
-```sh
-docker build -t kube-guardian:latest .
-helm install kube-guardian ./helm
-```
-
-## Development Roadmap
-
-The project is implemented in phases, each on its own feature branch:
-
-| Phase | Branch | Description |
-|-------|--------|-------------|
-| 0 | `feature/phase-0-foundations` | Rust fundamentals — structs, enums, ownership, error handling |
-| 1 | `feature/phase-1-cli-design` | CLI design with clap, traits, module architecture |
-| 2 | `feature/phase-2-async` | Async runtime with Tokio, concurrent task scheduling |
-| 3 | `feature/phase-3-crd` | Serde serialization, CRD modeling with kube-rs |
-| 4 | `feature/phase-4-controller` | Kubernetes controller pattern, reconcile loop, finalizers |
-| 5 | `feature/phase-5-webhook` | Admission webhook with axum, TLS configuration |
-| 6 | `feature/phase-6-observability` | Tracing, Prometheus metrics, health checks |
-| 7 | `feature/phase-7-multicluster` | Multi-cluster client management and state aggregation |
-| 8 | `feature/phase-8-enterprise` | Leader election, RBAC hardening, Helm chart, Docker |
-
-## Key Dependencies
-
-| Crate | Purpose |
-|-------|---------|
-| `clap` | CLI argument parsing |
-| `tokio` | Async runtime |
-| `kube` | Kubernetes client and CRD derive macros |
-| `kube-runtime` | Controller runtime and reconciliation |
-| `axum` | HTTP server for webhooks |
-| `serde` | Serialization/deserialization |
-| `schemars` | JSON Schema generation for CRDs |
-| `tracing` | Structured logging |
-| `prometheus` | Metrics collection and exposition |
-
-## License
-
-This project is for educational and professional development purposes.
+[Apache License 2.0](LICENSE).
