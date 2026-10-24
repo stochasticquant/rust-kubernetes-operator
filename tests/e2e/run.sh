@@ -2,8 +2,11 @@
 # End-to-end test against a real cluster (kind, k3s, ...). Requires kubectl, cert-manager in the
 # cluster, and the image `ferrogate:dev` available to the nodes (see tests/e2e/README.md).
 #
-#   tests/e2e/run.sh            install, test, uninstall
-#   KEEP=1 tests/e2e/run.sh     leave Ferrogate installed afterwards
+#   tests/e2e/run.sh                 install with Kustomize, test, uninstall
+#   INSTALL=helm tests/e2e/run.sh    install with the Helm chart instead
+#   KEEP=1 tests/e2e/run.sh          leave Ferrogate installed afterwards
+#
+# HELM_ARGS adds arguments to `helm install` (for example node selectors).
 #
 # Only the namespace `ferrogate-e2e` is affected by the test policies.
 set -euo pipefail
@@ -11,6 +14,7 @@ cd "$(dirname "$0")"
 
 NS=ferrogate-e2e
 OVERLAY=${OVERLAY:-overlay}
+INSTALL=${INSTALL:-kustomize}
 pass=0
 fail=0
 
@@ -21,13 +25,29 @@ cleanup() {
   kubectl delete namespace "$NS" --ignore-not-found --wait=false >/dev/null
   kubectl delete -f policies.yaml --ignore-not-found >/dev/null
   if [[ -z "${KEEP:-}" ]]; then
-    kubectl delete -k "$OVERLAY" --ignore-not-found >/dev/null 2>&1 || true
+    if [[ $INSTALL == helm ]]; then
+      helm uninstall ferrogate -n ferrogate-system --wait >/dev/null 2>&1 || true
+      # Helm never deletes CRDs; the test does, to leave the cluster as it found it.
+      kubectl delete -f ../../charts/ferrogate/crds/ --ignore-not-found >/dev/null 2>&1 || true
+      kubectl delete namespace ferrogate-system --ignore-not-found >/dev/null 2>&1 || true
+    else
+      kubectl delete -k "$OVERLAY" --ignore-not-found >/dev/null 2>&1 || true
+    fi
   fi
 }
 trap cleanup EXIT
 
-echo "==> Installing Ferrogate"
-kubectl apply -k "$OVERLAY" >/dev/null
+echo "==> Installing Ferrogate ($INSTALL)"
+if [[ $INSTALL == helm ]]; then
+  kubectl create namespace ferrogate-system --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  kubectl label namespace ferrogate-system pod-security.kubernetes.io/enforce=restricted --overwrite >/dev/null
+  # shellcheck disable=SC2086 # HELM_ARGS holds several arguments.
+  helm upgrade --install ferrogate ../../charts/ferrogate -n ferrogate-system \
+    --set image.repository=docker.io/library/ferrogate --set image.tag=dev --set image.pullPolicy=Never \
+    ${HELM_ARGS:-} >/dev/null
+else
+  kubectl apply -k "$OVERLAY" >/dev/null
+fi
 kubectl -n ferrogate-system wait certificate/ferrogate-webhook --for=condition=Ready --timeout=120s >/dev/null
 kubectl -n ferrogate-system rollout status deploy/ferrogate-webhook --timeout=180s >/dev/null
 kubectl -n ferrogate-system rollout status deploy/ferrogate-operator --timeout=180s >/dev/null

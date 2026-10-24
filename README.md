@@ -44,10 +44,11 @@ and compiles policies to native Kubernetes admission where it can.
   tested fixtures.
 - **`ferrogate check`:** test policies against local YAML in CI, without a cluster.
 - **Operations:** Prometheus metrics, `/healthz` and `/readyz`, JSON logs, graceful shutdown.
-- **Install:** Kustomize manifests with least-privilege RBAC, PDB, NetworkPolicy and a hardened,
-  restricted-PSS deployment.
+- **Install:** [Helm chart](charts/ferrogate/) with a validated values schema and optional
+  Prometheus `ServiceMonitor`, or Kustomize manifests. Least-privilege RBAC, PDBs, NetworkPolicy,
+  hardened restricted-PSS pods.
 
-Not yet: custom CEL rules, PolicyReports, namespaced policies, Helm chart, signed releases.
+Not yet: custom CEL rules, PolicyReports, namespaced policies, published images and signed releases.
 
 ## Quick start
 
@@ -58,7 +59,8 @@ Rust 1.89+ to build from source.
 git clone https://github.com/stochasticquant/rust-kubernetes-operator ferrogate
 cd ferrogate
 docker build -t ferrogate:dev .          # then load it into your cluster (kind load, ctr import, ...)
-kubectl apply -k tests/e2e/overlay       # installs Ferrogate using the local image
+helm install ferrogate charts/ferrogate -n ferrogate-system --create-namespace \
+  --set image.repository=docker.io/library/ferrogate --set image.tag=dev
 kubectl apply -f policies/pss-restricted/policy.yaml
 ```
 

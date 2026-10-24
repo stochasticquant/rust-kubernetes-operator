@@ -1,0 +1,70 @@
+# Default values for Ferrogate. Every value is validated by values.schema.json.
+
+image:
+  repository: ghcr.io/stochasticquant/ferrogate
+  # Defaults to the chart's appVersion.
+  tag: ""
+  # Set to pin the image by digest (recommended for production), e.g. "sha256:...".
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+logFormat: json
+# Log level filter, e.g. "info" or "ferrogate_operator=debug,info".
+logLevel: info
+
+operator:
+  # Two replicas with leader election: one reconciles, the other takes over in seconds.
+  replicas: 2
+  scan:
+    enabled: true
+    # Seconds between background scans of each policy (minimum 30).
+    intervalSeconds: 300
+    maxObjects: 20000
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {memory: 256Mi}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+webhook:
+  # The admission webhook. Set to false to use only native enforcement and background scans.
+  enabled: true
+  replicas: 2
+  # Ignore (default): requests are admitted when Ferrogate is unavailable. Fail: they are denied.
+  failurePolicy: Ignore
+  timeoutSeconds: 5
+  # Namespaces never sent to the webhook, in addition to kube-system, kube-node-lease and the
+  # release namespace.
+  excludedNamespaces: []
+  maxBodyBytes: 7340032
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {memory: 256Mi}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+certManager:
+  # The webhook certificate comes from cert-manager (required while webhook.enabled is true).
+  enabled: true
+  # Validity of the serving certificate; renewed 15 days before expiry and reloaded live.
+  duration: 2160h
+
+podDisruptionBudget:
+  enabled: true
+
+networkPolicy:
+  enabled: true
+
+metrics:
+  serviceMonitor:
+    # Create a Prometheus Operator ServiceMonitor.
+    enabled: false
+    # Labels your Prometheus uses to select ServiceMonitors, e.g. {release: monitoring}.
+    labels: {}
+    interval: 30s

@@ -31,6 +31,9 @@ All notable changes to Ferrogate are listed here. The format follows
 - End-to-end test script in `tests/e2e/`.
 - Native enforcement: `enforcement: Native` compiles a policy to a `ValidatingAdmissionPolicy`
   and binding that the API server evaluates itself; `ferrogate native` prints them.
+- Helm chart (`charts/ferrogate`) with a values schema, optional `ServiceMonitor`, and the same
+  hardening as the Kustomize install; CI runs the e2e test with both.
+- `Makefile` with the common development tasks.
 - Leader election through a Lease (`--leader-elect`); the manifests run two operator replicas.
 - Property-based robustness tests for the engine and the admission endpoint; coverage report in CI.
 - `ferrogate crd` prints the custom resource definitions; the generated YAML is in `config/crd/`.

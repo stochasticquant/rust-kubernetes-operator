@@ -85,11 +85,13 @@ jobs:
           toolchain: "1.99"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Regenerate CRDs
-        run: cargo run --locked -q -p ferrogate -- crd > config/crd/clustergatepolicies.ferrogate.stochasticquant.io.yaml
+        run: |
+          cargo run --locked -q -p ferrogate -- crd > config/crd/clustergatepolicies.ferrogate.stochasticquant.io.yaml
+          cp config/crd/clustergatepolicies.ferrogate.stochasticquant.io.yaml charts/ferrogate/crds/
       - name: Fail if generated CRDs differ from the committed ones
         run: |
-          git diff --exit-code -- config/crd/ || {
-            echo "::error::CRDs are out of date. Run: cargo run -p ferrogate -- crd > config/crd/clustergatepolicies.ferrogate.stochasticquant.io.yaml"
+          git diff --exit-code -- config/crd/ charts/ferrogate/crds/ || {
+            echo "::error::CRDs are out of date. Run: make crds"
             exit 1
           }
 
@@ -104,6 +106,33 @@ jobs:
         with:
           command: check
           arguments: --all-features
+
+  helm:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Lint
+        run: helm lint --strict charts/ferrogate
+      - name: Render supported configurations
+        run: |
+          helm template t charts/ferrogate > /dev/null
+          helm template t charts/ferrogate --set webhook.enabled=false --set certManager.enabled=false > /dev/null
+          helm template t charts/ferrogate --set metrics.serviceMonitor.enabled=true \
+            --set image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 > /dev/null
+      - name: Reject invalid configurations
+        run: |
+          reject() {
+            if helm template t charts/ferrogate "$@" > /dev/null 2>&1; then
+              echo "::error::accepted invalid values: $*"
+              exit 1
+            fi
+          }
+          reject --set webhook.failurePolicy=Maybe
+          reject --set operator.replica=3
+          reject --set certManager.enabled=false
 
   coverage:
     name: Coverage
@@ -133,9 +162,13 @@ jobs:
         run: cargo llvm-cov --package ferrogate-core --locked --fail-under-lines 80 --summary-only
 
   e2e:
-    name: E2E (kind)
+    name: E2E (kind, ${{ matrix.install }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        install: [kustomize, helm]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -153,8 +186,9 @@ jobs:
       - name: Load image
         run: kind load docker-image ferrogate:dev --name ferrogate
       - name: Run end-to-end tests
-        run: tests/e2e/run.sh
+        run: INSTALL=${{ matrix.install }} tests/e2e/run.sh
       - name: Native enforcement matches the engine on every fixture
+        if: matrix.install == 'kustomize'
         run: |
           FERROGATE="docker run --rm --user $(id -u) -v /tmp:/tmp -v $PWD:/work -w /work ferrogate:dev" \
             tests/e2e/native.sh

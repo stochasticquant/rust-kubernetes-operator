@@ -1,0 +1,129 @@
+# Least-privilege RBAC; every rule is explained in docs/rbac.md.
+{{- $name := include "ferrogate.fullname" . }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}-operator
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}-operator
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [ferrogate.stochasticquant.io]
+    resources: [clustergatepolicies]
+    verbs: [get, list, watch]
+  - apiGroups: [ferrogate.stochasticquant.io]
+    resources: [clustergatepolicies/status]
+    verbs: [get, patch, update]
+  - apiGroups: [events.k8s.io]
+    resources: [events]
+    verbs: [create, patch]
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [list, watch]
+  - apiGroups: [admissionregistration.k8s.io]
+    resources: [validatingadmissionpolicies, validatingadmissionpolicybindings]
+    verbs: [get, create, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}-scan
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels:
+        ferrogate.stochasticquant.io/aggregate-to-scan: "true"
+rules: []
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}-scan-workloads
+  labels:
+    {{- include "ferrogate.labels" . | nindent 4 }}
+    ferrogate.stochasticquant.io/aggregate-to-scan: "true"
+rules:
+  - apiGroups: [""]
+    resources: [pods, replicationcontrollers]
+    verbs: [list]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, daemonsets, replicasets]
+    verbs: [list]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}-operator
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: {{ $name }}-operator}
+subjects: [{kind: ServiceAccount, name: {{ $name }}-operator, namespace: {{ .Release.Namespace }}}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}-scan
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: {{ $name }}-scan}
+subjects: [{kind: ServiceAccount, name: {{ $name }}-operator, namespace: {{ .Release.Namespace }}}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}-operator-leader
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [create]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    resourceNames: [ferrogate-operator]
+    verbs: [get, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}-operator-leader
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ $name }}-operator-leader}
+subjects: [{kind: ServiceAccount, name: {{ $name }}-operator, namespace: {{ .Release.Namespace }}}]
+{{- if .Values.webhook.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}-webhook
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}-webhook
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [ferrogate.stochasticquant.io]
+    resources: [clustergatepolicies]
+    verbs: [list, watch]
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}-webhook
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: {{ $name }}-webhook}
+subjects: [{kind: ServiceAccount, name: {{ $name }}-webhook, namespace: {{ .Release.Namespace }}}]
+{{- end }}

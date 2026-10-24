@@ -1,0 +1,24 @@
+apiVersion: v2
+name: ferrogate
+description: Rust-native Kubernetes policy operator and admission webhook
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.30.0-0"
+home: https://github.com/stochasticquant/rust-kubernetes-operator
+sources:
+  - https://github.com/stochasticquant/rust-kubernetes-operator
+keywords: [kubernetes, policy, admission, security, pod-security]
+maintainers:
+  - name: stochasticquant
+    url: https://github.com/stochasticquant
+annotations:
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/operator: "true"
+  artifacthub.io/prerelease: "true"
+  artifacthub.io/crds: |
+    - kind: ClusterGatePolicy
+      version: v1alpha1
+      name: clustergatepolicies.ferrogate.stochasticquant.io
+      displayName: ClusterGatePolicy
+      description: A cluster-wide policy that Ferrogate audits or enforces

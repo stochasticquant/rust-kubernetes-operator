@@ -259,24 +259,25 @@ Testing
 
 **Exit:** `v0.1.0` — install on kind in five minutes, audit and enforce a PSS-restricted pack.
 
-### Phase C — Enterprise readiness (2–3 weeks)
+### Phase C — Enterprise readiness (2–3 weeks) — started
 
 Packaging
-- [ ] Multi-stage `Dockerfile` → distroless/static, non-root UID, read-only root filesystem,
-      multi-arch (amd64, arm64) via `docker buildx`.
-- [ ] Helm chart in `charts/`: values schema (`values.schema.json`), PodDisruptionBudget,
-      anti-affinity, resource requests/limits, NetworkPolicy, ServiceMonitor, optional cert-manager.
-      Published as an OCI chart to GHCR. Chart tests with `helm unittest` and `ct lint`.
-- [ ] Kustomize bases under `config/` for non-Helm users.
+- [x] Multi-stage `Dockerfile` → distroless, non-root UID, read-only root filesystem.
+- [ ] Multi-arch (amd64, arm64) via `docker buildx`.
+- [x] Helm chart in `charts/`: values schema (`values.schema.json`), PodDisruptionBudget,
+      anti-affinity, resource requests/limits, NetworkPolicy, ServiceMonitor, cert-manager. CI lints,
+      renders, rejects invalid values and runs the e2e test with the chart.
+- [ ] Publish as an OCI chart to GHCR; `helm unittest` and `ct lint`.
+- [x] Kustomize bases under `config/` for non-Helm users.
 
 Security and supply chain
-- [ ] Least-privilege `ClusterRole` per component; document each permission in `docs/rbac.md`.
+- [x] Least-privilege `ClusterRole` per component; document each permission in `docs/rbac.md`.
 - [ ] `cargo deny` (licenses, advisories, bans), `cargo audit`, Trivy/Grype image scanning.
 - [ ] Sign images and charts with cosign (keyless, GitHub OIDC); attach SBOM (syft) and SLSA
       provenance (`slsa-github-generator`).
-- [ ] Renovate or Dependabot for Cargo, GitHub Actions and the Dockerfile; pin actions by SHA.
+- [x] Renovate or Dependabot for Cargo, GitHub Actions and the Dockerfile; pin actions by SHA.
 - [ ] OpenSSF Scorecard workflow and badge; aim for the OpenSSF Best Practices badge.
-- [ ] Threat model in `docs/security/threat-model.md`.
+- [x] Threat model in `docs/security/threat-model.md`.
 
 Releases (tag-driven, like WorriorVex)
 - [ ] Pushing `vX.Y.Z` runs: tests → binaries (linux/macOS/windows, amd64/arm64) → image → chart →

@@ -8,7 +8,17 @@ Status: pre-release (`v1alpha1`). A Helm chart and signed images arrive in Phase
 - [cert-manager](https://cert-manager.io) for the webhook certificate
 - `kubectl` 1.27+ (for `-k`)
 
-## Install
+## Install with Helm
+
+```sh
+kubectl create namespace ferrogate-system
+kubectl label namespace ferrogate-system pod-security.kubernetes.io/enforce=restricted
+helm install ferrogate charts/ferrogate -n ferrogate-system
+```
+
+Values and Prometheus integration: [charts/ferrogate/README.md](../charts/ferrogate/README.md).
+
+## Install with Kustomize
 
 ```sh
 kubectl apply -k config/deploy
