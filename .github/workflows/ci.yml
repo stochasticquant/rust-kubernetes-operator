@@ -154,6 +154,10 @@ jobs:
         run: kind load docker-image ferrogate:dev --name ferrogate
       - name: Run end-to-end tests
         run: tests/e2e/run.sh
+      - name: Native enforcement matches the engine on every fixture
+        run: |
+          FERROGATE="docker run --rm --user $(id -u) -v /tmp:/tmp -v $PWD:/work -w /work ferrogate:dev" \
+            tests/e2e/native.sh
       - name: Logs on failure
         if: failure()
         run: |

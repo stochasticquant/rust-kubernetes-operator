@@ -74,7 +74,7 @@ fn no_scan() -> Config {
 fn status_patch(requests: &[Recorded]) -> &Value {
     let patch = requests
         .iter()
-        .find(|r| r.method == "PATCH")
+        .find(|r| r.method == "PATCH" && r.path.ends_with("/status"))
         .expect("a status patch");
     assert_eq!(
         patch.path,
@@ -202,6 +202,145 @@ async fn api_errors_are_returned_for_backoff() {
     let (client, _) = mock::client(Box::new(|_, _, _| mock::status(500, "InternalError")));
     let ctx = context(client, no_scan());
     assert!(reconcile_inner(&policy(&spec, None), &ctx).await.is_err());
+}
+
+mod native {
+    use super::*;
+    use kube::core::ApiResource;
+
+    fn listable(group: &str, kind: &str, plural: &str) -> scan::Listable {
+        scan::Listable {
+            resource: ApiResource {
+                group: group.into(),
+                version: "v1".into(),
+                api_version: if group.is_empty() {
+                    "v1".into()
+                } else {
+                    format!("{group}/v1")
+                },
+                kind: kind.into(),
+                plural: plural.into(),
+            },
+            namespaced: true,
+        }
+    }
+
+    fn api() -> mock::Responder {
+        Box::new(|method, path, body| match (method, path) {
+            ("PATCH", p) if p.contains("/validatingadmissionpolic") => (200, body.clone()),
+            ("PATCH", p) if p.contains("/clustergatepolicies/p/status") => (
+                200,
+                json!({
+                    "apiVersion": "ferrogate.stochasticquant.io/v1alpha1", "kind": "ClusterGatePolicy",
+                    "metadata": {"name": "p"}, "spec": {"match": {"resources": [{"kinds": ["Pod"]}]}, "rules": []}
+                }),
+            ),
+            ("DELETE", _) => (
+                200,
+                json!({"kind": "Status", "apiVersion": "v1", "status": "Success"}),
+            ),
+            ("POST", p) if p.contains("/events") => (201, body.clone()),
+            _ => mock::status(404, "NotFound"),
+        })
+    }
+
+    async fn run_native(policy: &ClusterGatePolicy) -> (Outcome, Vec<Recorded>) {
+        let (client, log) = mock::client(api());
+        let mut ctx = context(client, no_scan());
+        ctx.discovery = scan::DiscoveryCache::with(vec![listable("", "Pod", "pods")]);
+        let (_, outcome) = reconcile_inner(policy, &ctx).await.unwrap();
+        let requests = log.lock().unwrap().clone();
+        (outcome, requests)
+    }
+
+    #[tokio::test]
+    async fn native_policy_applies_vap_and_binding() {
+        let spec = json!({
+            "mode": "Enforce", "enforcement": "Native",
+            "match": {"resources": [{"kinds": ["Pod"]}]},
+            "rules": [{"name": "tag", "disallowLatestTag": true}]
+        });
+        let (outcome, requests) = run_native(&policy(&spec, None)).await;
+        assert_eq!(outcome, Outcome::Active);
+
+        let vap = requests
+            .iter()
+            .find(|r| r.path.ends_with("/validatingadmissionpolicies/ferrogate-p"))
+            .expect("policy applied");
+        assert_eq!(vap.method, "PATCH");
+        assert_eq!(vap.body["metadata"]["ownerReferences"][0]["uid"], "uid-1");
+        assert_eq!(
+            vap.body["spec"]["matchConstraints"]["resourceRules"][0]["resources"],
+            json!(["pods"])
+        );
+        let binding = requests
+            .iter()
+            .find(|r| {
+                r.path
+                    .ends_with("/validatingadmissionpolicybindings/ferrogate-p")
+            })
+            .expect("binding applied");
+        assert_eq!(binding.body["spec"]["validationActions"], json!(["Deny"]));
+
+        let status = status_patch(&requests);
+        assert_eq!(status["enforcement"], "Native");
+        assert!(
+            status["conditions"][0]["message"]
+                .as_str()
+                .unwrap()
+                .ends_with("enforced natively by ValidatingAdmissionPolicy ferrogate-p")
+        );
+    }
+
+    #[tokio::test]
+    async fn unsupported_native_policy_is_rejected_and_cleaned_up() {
+        let spec = json!({
+            "enforcement": "Native",
+            "match": {"resources": [{"kinds": ["Pod"]}]},
+            "rules": [{"name": "reg", "allowedRegistries": ["ghcr.io"]}]
+        });
+        let previous = json!({"observedGeneration": 2, "enforcement": "Native"});
+        let (outcome, requests) = run_native(&policy(&spec, Some(previous))).await;
+        assert_eq!(outcome, Outcome::Invalid);
+        let status = status_patch(&requests);
+        assert_eq!(status["conditions"][0]["reason"], "NativeUnsupported");
+        assert_eq!(status["enforcement"], Value::Null);
+        let deletes: Vec<&str> = requests
+            .iter()
+            .filter(|r| r.method == "DELETE")
+            .map(|r| r.path.as_str())
+            .collect();
+        assert_eq!(deletes.len(), 2, "{deletes:?}");
+        assert!(
+            !requests
+                .iter()
+                .any(|r| r.method == "PATCH" && r.path.contains("validatingadmission"))
+        );
+    }
+
+    #[tokio::test]
+    async fn switching_back_to_webhook_removes_generated_objects() {
+        let spec = json!({
+            "match": {"resources": [{"kinds": ["Pod"]}]},
+            "rules": [{"name": "tag", "disallowLatestTag": true}]
+        });
+        let previous = json!({"observedGeneration": 2, "enforcement": "Native"});
+        let (outcome, requests) = run_native(&policy(&spec, Some(previous))).await;
+        assert_eq!(outcome, Outcome::Active);
+        let deleted: Vec<&str> = requests
+            .iter()
+            .filter(|r| r.method == "DELETE")
+            .map(|r| r.path.as_str())
+            .collect();
+        assert_eq!(
+            deleted,
+            [
+                "/apis/admissionregistration.k8s.io/v1/validatingadmissionpolicybindings/ferrogate-p",
+                "/apis/admissionregistration.k8s.io/v1/validatingadmissionpolicies/ferrogate-p"
+            ]
+        );
+        assert_eq!(status_patch(&requests)["enforcement"], "Webhook");
+    }
 }
 
 mod leader {

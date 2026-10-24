@@ -29,6 +29,8 @@ All notable changes to Ferrogate are listed here. The format follows
 - Container image (distroless, non-root) and Kustomize install in `config/deploy/` with
   least-privilege RBAC, PDB, NetworkPolicy and a cert-manager certificate.
 - End-to-end test script in `tests/e2e/`.
+- Native enforcement: `enforcement: Native` compiles a policy to a `ValidatingAdmissionPolicy`
+  and binding that the API server evaluates itself; `ferrogate native` prints them.
 - Leader election through a Lease (`--leader-elect`); the manifests run two operator replicas.
 - Property-based robustness tests for the engine and the admission endpoint; coverage report in CI.
 - `ferrogate crd` prints the custom resource definitions; the generated YAML is in `config/crd/`.

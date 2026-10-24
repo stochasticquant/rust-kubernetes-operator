@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::CompileError;
 use crate::matching::{ExcludeSpec, MatchSpec, Resource};
 use crate::rules::{Rule, RuleSpec};
-use crate::{Mode, PolicyResult, Severity};
+use crate::{Enforcement, Mode, PolicyResult, Severity};
 
 /// Maximum number of rules in one policy.
 pub const MAX_RULES: usize = 64;
@@ -26,6 +26,10 @@ pub struct PolicySpec {
     /// How serious a violation of this policy is.
     #[serde(default)]
     pub severity: Severity,
+
+    /// `Webhook` (default) or `Native` (compiled to a `ValidatingAdmissionPolicy`).
+    #[serde(default)]
+    pub enforcement: Enforcement,
 
     /// Which resources the policy applies to.
     #[serde(rename = "match")]
@@ -46,6 +50,7 @@ pub struct Policy {
     pub name: String,
     pub mode: Mode,
     pub severity: Severity,
+    pub enforcement: Enforcement,
     pub match_: MatchSpec,
     pub exclude: ExcludeSpec,
     pub rules: Vec<Rule>,
@@ -76,6 +81,7 @@ impl Policy {
             name: name.to_owned(),
             mode: spec.mode,
             severity: spec.severity,
+            enforcement: spec.enforcement,
             match_: spec.match_.clone(),
             exclude,
             rules,

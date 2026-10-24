@@ -53,7 +53,7 @@ echo "==> Applying test policies"
 kubectl wait --for=delete "namespace/$NS" --timeout=180s >/dev/null 2>&1 || true
 kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 kubectl apply -f policies.yaml >/dev/null
-for p in e2e-enforce e2e-warn e2e-invalid; do
+for p in e2e-enforce e2e-warn e2e-invalid e2e-native; do
   kubectl wait "clustergatepolicy/$p" --for=jsonpath='{.status.observedGeneration}'=1 --timeout=60s >/dev/null
 done
 sleep 3  # webhook caches pick up the policies
@@ -106,6 +106,33 @@ YAML
 else
   grep -q "spec.template.spec.containers\[0\].image" <<<"$out" && ok "Deployment denied with field path" || bad "unexpected: $out"
 fi
+
+echo "==> Native enforcement"
+[[ $(kubectl get cgp e2e-native -o jsonpath='{.status.enforcement}') == Native ]] \
+  && ok "native policy reports enforcement Native" || bad "native policy status: $(kubectl get cgp e2e-native -o jsonpath='{.status}')"
+kubectl get validatingadmissionpolicy ferrogate-e2e-native >/dev/null 2>&1 \
+  && ok "ValidatingAdmissionPolicy generated" || bad "no ValidatingAdmissionPolicy"
+sleep 3  # bindings take effect asynchronously
+if out=$(cat <<YAML | kubectl apply --dry-run=server -f - 2>&1
+apiVersion: v1
+kind: Pod
+metadata: {name: native, namespace: $NS}
+spec:
+  containers: [{name: app, image: busybox:1.36, securityContext: {privileged: true}}]
+YAML
+); then
+  bad "privileged pod admitted despite the native policy"
+else
+  grep -q "ValidatingAdmissionPolicy 'ferrogate-e2e-native'" <<<"$out" \
+    && ok "API server denies through the generated policy" || bad "unexpected: $out"
+fi
+kubectl delete cgp e2e-native >/dev/null
+for _ in $(seq 1 30); do
+  kubectl get validatingadmissionpolicy ferrogate-e2e-native >/dev/null 2>&1 || break
+  sleep 1
+done
+kubectl get validatingadmissionpolicy ferrogate-e2e-native >/dev/null 2>&1 \
+  && bad "generated policy left behind" || ok "generated policy removed with its ClusterGatePolicy"
 
 echo "==> Background scan and metrics"
 scanned=$(kubectl get cgp e2e-enforce -o jsonpath='{.status.conditions[?(@.type=="Scanned")].status}')

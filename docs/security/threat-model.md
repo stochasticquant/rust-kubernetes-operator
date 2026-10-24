@@ -70,6 +70,7 @@ tests can refer to it. **Status** says whether the mitigation exists in the code
 | T-13 | D | Reconcile errors cause a hot loop against the API server | Per-policy exponential back-off (5 s to 5 min); status writes do not re-trigger work; scans paginated (500) and capped (20 000 objects) | ✅ |
 | T-14 | R | Changes made by the operator cannot be traced | Kubernetes Events on transitions; the operator only writes policy status. Generated objects (VAP) will be labelled and owner-referenced | ✅ / 🟡 B VAP |
 | T-15 | T | Two operator replicas act at once (split brain) | Lease-based leader election; a leader that cannot renew within 10 s exits before the 15 s lease can be taken over; the operator only writes policy status | ✅ |
+| T-16 | E | A compromised operator creates ValidatingAdmissionPolicies that deny everything | Needed for native enforcement; equivalent to the webhook's existing power to deny. Generated objects are named `ferrogate-*`, labelled, owned by their policy and visible with `kubectl get vap`. Kubernetes RBAC cannot restrict `create` by name | ⚪ R-4 |
 
 ### 4.3 TB-3: policy authors → cluster
 
@@ -109,6 +110,8 @@ tests can refer to it. **Status** says whether the mitigation exists in the code
 | R-1 | A cluster-admin can disable Ferrogate | Out of scope: cluster-admin is fully trusted by Kubernetes itself |
 | R-2 | With `failurePolicy: Ignore`, an attacker who can take the webhook down can bypass webhook-only rules | Availability is preferred by default; users who need fail-closed can set `Fail`. Rules compiled to native VAP are not affected |
 | R-3 | Dependencies contain `unsafe` code (for example `ring`) | Widely audited crates; tracked through RustSec and `cargo deny` |
+| R-4 | The operator can create admission policies (T-16) | Required for native enforcement; no more power than the webhook already has |
+| R-5 | Native `Enforce` policies fail closed on CEL evaluation errors | Evaluation happens in the API server with no network hop; errors only come from malformed objects. `Warn`/`Audit` policies fail open |
 
 ## 6. Review log
 

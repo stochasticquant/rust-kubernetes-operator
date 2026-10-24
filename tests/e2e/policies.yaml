@@ -37,3 +37,17 @@ spec:
   rules:
     - name: disabled-check
       disallowPrivileged: false
+---
+# Enforced by the API server through a generated ValidatingAdmissionPolicy.
+apiVersion: ferrogate.stochasticquant.io/v1alpha1
+kind: ClusterGatePolicy
+metadata: {name: e2e-native}
+spec:
+  mode: Enforce
+  enforcement: Native
+  match:
+    resources: [{kinds: [Pod]}]
+    namespaces: [ferrogate-e2e]
+  rules:
+    - name: no-privileged
+      disallowPrivileged: true

@@ -28,6 +28,7 @@
 mod engine;
 mod error;
 mod matching;
+pub mod native;
 mod policy;
 mod rules;
 mod selector;
@@ -38,6 +39,6 @@ pub use error::CompileError;
 pub use matching::{
     ExcludeSpec, MatchSpec, NAMESPACE_NAME_LABEL, Requester, Resource, ResourceFilter,
 };
-pub use policy::{Mode, PolicyResult, Severity, Violation};
+pub use policy::{Enforcement, Mode, PolicyResult, Severity, Violation};
 pub use rules::{Check, Rule, RuleSpec};
 pub use selector::{LabelSelector, LabelSelectorRequirement, SelectorOperator};

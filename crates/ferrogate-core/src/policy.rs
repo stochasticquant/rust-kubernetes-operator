@@ -25,6 +25,26 @@ impl Mode {
     }
 }
 
+/// Who evaluates a policy at admission time.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+pub enum Enforcement {
+    /// The Ferrogate admission webhook (default). Supports every rule.
+    #[default]
+    Webhook,
+    /// A generated `ValidatingAdmissionPolicy`, evaluated by the API server itself: no webhook
+    /// call. Only for rules and kinds that can be expressed in CEL.
+    Native,
+}
+
+impl Enforcement {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Webhook => "Webhook",
+            Self::Native => "Native",
+        }
+    }
+}
+
 /// How serious a violation is.
 #[derive(
     Clone,

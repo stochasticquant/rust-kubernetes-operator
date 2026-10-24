@@ -11,6 +11,16 @@ Ready-to-use `ClusterGatePolicy` definitions. All start in `Audit` mode and skip
 Not yet covered from PSS (planned with CEL rules): `procMount`, AppArmor and SELinux options,
 `sysctls`, Windows host process, and the restricted volume-type allow-list.
 
+## Native enforcement
+
+Every pack can run as `enforcement: Native` (a generated `ValidatingAdmissionPolicy`):
+
+```sh
+ferrogate native policies/pss-restricted/policy.yaml   # preview the generated objects
+```
+
+`tests/e2e/native.sh` checks on a real API server that the native verdicts match the fixtures.
+
 ## Testing
 
 Every pack has fixtures that CI checks (`cargo test -p ferrogate --test policy_packs`):

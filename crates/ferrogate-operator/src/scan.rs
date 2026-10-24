@@ -36,6 +36,14 @@ pub struct DiscoveryCache {
 }
 
 impl DiscoveryCache {
+    /// A cache pre-filled with `resources`, for tests.
+    #[cfg(test)]
+    pub fn with(resources: Vec<Listable>) -> Self {
+        Self {
+            inner: RwLock::new(Some((Instant::now(), Arc::new(resources)))),
+        }
+    }
+
     pub async fn get(&self, client: &Client) -> Result<Arc<Vec<Listable>>, Error> {
         if let Some((at, cached)) = self.inner.read().await.as_ref()
             && at.elapsed() < DISCOVERY_TTL

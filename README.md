@@ -19,6 +19,8 @@ and compiles policies to native Kubernetes admission where it can.
   anything. Move to `Warn`, then `Enforce`, when the results look right.
 - **One engine everywhere.** Admission, background scans and the offline `ferrogate check` command
   share the same evaluation code, so they always agree.
+- **Native admission when you want it.** Mark a policy `enforcement: Native` and Ferrogate compiles
+  it to a `ValidatingAdmissionPolicy`, so the API server enforces it with no webhook in the path.
 - **Secure by design.** Least-privilege RBAC, HTTPS-only webhook, fail-open by default, no
   telemetry. See the [security architecture](docs/SECURITY_ARCHITECTURE.md).
 
@@ -30,6 +32,9 @@ and compiles policies to native Kubernetes admission where it can.
 - **15 built-in checks:** required labels and annotations, allowed registries, no `latest` tag,
   resource limits and requests, and the Pod Security Standards baseline and restricted checks.
   Violations name the field, for example `spec.template.spec.containers[0].image`.
+- **Native enforcement (opt-in):** `enforcement: Native` compiles a policy to a
+  `ValidatingAdmissionPolicy` that the API server evaluates itself, with no webhook in the path.
+  Verified against every pack fixture on a real API server.
 - **Admission webhook:** `Enforce` denies with a clear message, `Warn` shows a warning in
   `kubectl`, `Audit` writes to the API server audit log. HTTPS with cert-manager, certificate
   reloaded without restarts, request size, time and concurrency limits.
@@ -42,8 +47,7 @@ and compiles policies to native Kubernetes admission where it can.
 - **Install:** Kustomize manifests with least-privilege RBAC, PDB, NetworkPolicy and a hardened,
   restricted-PSS deployment.
 
-Not yet: `ValidatingAdmissionPolicy` compilation, CEL rules, PolicyReports, namespaced policies,
-Helm chart, signed releases.
+Not yet: custom CEL rules, PolicyReports, namespaced policies, Helm chart, signed releases.
 
 ## Quick start
 
@@ -113,7 +117,7 @@ Design decisions: [`docs/decisions/`](docs/decisions/).
 | Phase | Contents | Status |
 | --- | --- | --- |
 | A — Foundation | Licence, security baseline, workspace, CI, docs | done |
-| B — Working product | Full CRD, controller status, webhook with TLS, metrics, policy packs, e2e tests (done); ValidatingAdmissionPolicy compiler, CEL rules, policy reports (next) | in progress (`v0.1.0`) |
+| B — Working product | Full CRD, controller status, webhook with TLS, native enforcement (VAP), metrics, policy packs, HA, e2e tests (done); CEL rules, policy reports (next) | in progress (`v0.1.0`) |
 | C — Enterprise readiness | Hardened image, Helm chart, signed releases, SBOM, provenance, HA | planned (`v0.5.0`) |
 | D — Community | Docs site, policy packs (PSS, CIS, NSA), benchmarks | planned |
 | E — Advanced | Multi-cluster compliance, mutation, exceptions, WASM plugins | after 1.0 |
