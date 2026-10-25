@@ -1,0 +1,120 @@
+# Least-privilege RBAC. Every rule is explained in docs/rbac.md.
+# No access to Secrets, no wildcards, no escalate/bind/impersonate.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ferrogate-operator
+  namespace: ferrogate-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ferrogate-webhook
+  namespace: ferrogate-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ferrogate-operator
+rules:
+  - apiGroups: [ferrogate.stochasticquant.io]
+    resources: [clustergatepolicies]
+    verbs: [get, list, watch]
+  - apiGroups: [ferrogate.stochasticquant.io]
+    resources: [clustergatepolicies/status]
+    verbs: [get, patch, update]
+  - apiGroups: [events.k8s.io]
+    resources: [events]
+    verbs: [create, patch]
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [list, watch]
+  # Native enforcement: the generated ValidatingAdmissionPolicy and binding per policy.
+  - apiGroups: [admissionregistration.k8s.io]
+    resources: [validatingadmissionpolicies, validatingadmissionpolicybindings]
+    verbs: [get, create, patch, delete]
+---
+# Read access for background scans. Aggregated: to scan more kinds, create a ClusterRole with the
+# label below (see docs/rbac.md).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ferrogate-scan
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels:
+        ferrogate.stochasticquant.io/aggregate-to-scan: "true"
+rules: []
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ferrogate-scan-workloads
+  labels:
+    ferrogate.stochasticquant.io/aggregate-to-scan: "true"
+rules:
+  - apiGroups: [""]
+    resources: [pods, replicationcontrollers]
+    verbs: [list]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, daemonsets, replicasets]
+    verbs: [list]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ferrogate-webhook
+rules:
+  - apiGroups: [ferrogate.stochasticquant.io]
+    resources: [clustergatepolicies]
+    verbs: [list, watch]
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ferrogate-operator
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: ferrogate-operator}
+subjects: [{kind: ServiceAccount, name: ferrogate-operator, namespace: ferrogate-system}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ferrogate-scan
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: ferrogate-scan}
+subjects: [{kind: ServiceAccount, name: ferrogate-operator, namespace: ferrogate-system}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ferrogate-webhook
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: ferrogate-webhook}
+subjects: [{kind: ServiceAccount, name: ferrogate-webhook, namespace: ferrogate-system}]
+---
+# Leader election: only the operator's own Lease, only in its namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ferrogate-operator-leader
+  namespace: ferrogate-system
+rules:
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [create]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    resourceNames: [ferrogate-operator]
+    verbs: [get, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ferrogate-operator-leader
+  namespace: ferrogate-system
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: ferrogate-operator-leader}
+subjects: [{kind: ServiceAccount, name: ferrogate-operator, namespace: ferrogate-system}]

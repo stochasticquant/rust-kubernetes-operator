@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Pod
+metadata: {name: pinned, namespace: default}
+spec:
+  containers:
+    - name: app
+      image: busybox@sha256:7b3ccabffc97de872a30dfd234fd972a66d247c8cfc69b0550f276481852627c
+      resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 32Mi}}

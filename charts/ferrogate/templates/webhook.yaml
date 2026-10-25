@@ -1,0 +1,189 @@
+{{- if .Values.webhook.enabled }}
+{{- if not .Values.certManager.enabled }}
+{{- fail "webhook.enabled requires certManager.enabled (cert-manager provides the webhook certificate)" }}
+{{- end }}
+{{- $name := include "ferrogate.fullname" . }}
+{{- $svc := include "ferrogate.webhookService" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}-webhook
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ferrogate.labels" . | nindent 4 }}
+    app.kubernetes.io/component: webhook
+spec:
+  replicas: {{ .Values.webhook.replicas }}
+  selector:
+    matchLabels: {{- include "ferrogate.selector" (list . "webhook") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "ferrogate.selector" (list . "webhook") | nindent 8 }}
+      {{- with .Values.webhook.podAnnotations }}
+      annotations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ $name }}-webhook
+      {{- include "ferrogate.podSecurity" . | nindent 6 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.webhook.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.webhook.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      affinity:
+        {{- if .Values.webhook.affinity }}
+        {{- toYaml .Values.webhook.affinity | nindent 8 }}
+        {{- else }}
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels: {{- include "ferrogate.selector" (list . "webhook") | nindent 20 }}
+        {{- end }}
+      containers:
+        - name: webhook
+          image: {{ include "ferrogate.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - webhook
+            - --log-format={{ .Values.logFormat }}
+            - --max-body-bytes={{ int64 .Values.webhook.maxBodyBytes }}
+          env:
+            - name: FERROGATE_LOG
+              value: {{ .Values.logLevel | quote }}
+          ports:
+            - {name: https, containerPort: 8443}
+            - {name: metrics, containerPort: 8080}
+          livenessProbe: {httpGet: {path: /healthz, port: metrics}, periodSeconds: 20}
+          readinessProbe: {httpGet: {path: /readyz, port: metrics}, periodSeconds: 5}
+          resources: {{- toYaml .Values.webhook.resources | nindent 12 }}
+          {{- include "ferrogate.containerSecurity" . | nindent 10 }}
+          volumeMounts: [{name: tls, mountPath: /tls, readOnly: true}]
+      volumes:
+        - name: tls
+          secret: {secretName: {{ $name }}-webhook-tls}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $svc }}
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "ferrogate.selector" (list . "webhook") | nindent 4 }}
+  ports: [{name: https, port: 443, targetPort: https}]
+{{- if .Values.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}-webhook
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {{- include "ferrogate.selector" (list . "webhook") | nindent 6 }}
+{{- end }}
+---
+# A long-lived CA issues the short-lived serving certificate, so renewals never change the CA
+# bundle that cainjector writes into the webhook configuration.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ $name }}-selfsigned
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $name }}-ca
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+spec:
+  isCA: true
+  commonName: {{ $name }}-webhook-ca
+  secretName: {{ $name }}-ca
+  duration: 87600h
+  privateKey: {algorithm: ECDSA, size: 256}
+  issuerRef: {name: {{ $name }}-selfsigned, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ $name }}-ca
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+spec:
+  ca:
+    secretName: {{ $name }}-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $name }}-webhook
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+spec:
+  secretName: {{ $name }}-webhook-tls
+  duration: {{ .Values.certManager.duration }}
+  renewBefore: 360h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames:
+    - {{ $svc }}.{{ .Release.Namespace }}.svc
+    - {{ $svc }}.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef: {name: {{ $name }}-ca, kind: Issuer}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ $name }}
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ $name }}-ca
+webhooks:
+  - name: validate.ferrogate.stochasticquant.io
+    admissionReviewVersions: [v1]
+    sideEffects: None
+    failurePolicy: {{ .Values.webhook.failurePolicy }}
+    timeoutSeconds: {{ .Values.webhook.timeoutSeconds }}
+    matchPolicy: Equivalent
+    clientConfig:
+      service:
+        name: {{ $svc }}
+        namespace: {{ .Release.Namespace }}
+        path: /validate
+        port: 443
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values:
+            {{- $excluded := concat (list "kube-system" "kube-node-lease" .Release.Namespace) .Values.webhook.excludedNamespaces | uniq }}
+            {{- toYaml $excluded | nindent 12 }}
+    rules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        resources: [pods, replicationcontrollers]
+        operations: [CREATE, UPDATE]
+        scope: Namespaced
+      - apiGroups: [apps]
+        apiVersions: [v1]
+        resources: [deployments, statefulsets, daemonsets, replicasets]
+        operations: [CREATE, UPDATE]
+        scope: Namespaced
+      - apiGroups: [batch]
+        apiVersions: [v1]
+        resources: [jobs, cronjobs]
+        operations: [CREATE, UPDATE]
+        scope: Namespaced
+{{- end }}

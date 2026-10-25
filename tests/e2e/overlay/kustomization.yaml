@@ -1,0 +1,13 @@
+# Test overlay: run a locally built image (ferrogate:dev) without a registry.
+# Used by tests/e2e/run.sh. Set NODE to the node the image was imported into.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../config/deploy
+images:
+  - name: ghcr.io/stochasticquant/ferrogate
+    newName: docker.io/library/ferrogate
+    newTag: dev
+patches:
+  - target: {kind: Deployment}
+    path: local-image.yaml

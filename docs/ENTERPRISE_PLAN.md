@@ -214,70 +214,82 @@ Open-source hygiene
 
 **Exit:** clean repo, all community files, workspace builds, CI green.
 
-### Phase B — Working core product (3–5 weeks)
+### Phase B — Working core product (3–5 weeks) — in progress
 
 Engine (`ferrogate-core`)
-- [ ] Rule types: required labels/annotations, image registry allow-list, disallow `:latest`,
-      resource limits required, privileged/hostPath/hostNetwork checks, CEL expressions (`cel` crate).
-- [ ] Match/exclude logic (kinds, namespaces, selectors, subjects).
-- [ ] Verdict type with rule name, message, severity, JSON path.
+- [x] Rule types: required labels/annotations, image registry allow-list, disallow `:latest`,
+      resource limits/requests required, Pod Security Standards baseline and restricted checks.
+- [ ] CEL expressions (`cel` crate).
+- [x] Match/exclude logic (kinds, namespaces, selectors, subjects).
+- [x] Verdict type with rule name, message, severity, field path.
 
 Controller (`ferrogate-operator`)
-- [ ] Reconcile policies: validate, compile, write `status.conditions`, emit Kubernetes Events.
-- [ ] Finalizers to clean up generated VAP objects and reports.
-- [ ] Compile CEL-expressible rules to `ValidatingAdmissionPolicy` + binding; mark the rest for webhook.
-- [ ] Background scanner: evaluate existing workloads on a schedule and on policy change; write
-      `PolicyReport` / `ClusterPolicyReport`.
-- [ ] Leader election, exponential backoff in `error_policy`, shared context (`Arc<Context>` with
-      client, metrics, config), graceful shutdown.
+- [x] Reconcile policies: validate, compile, write `status.conditions`, emit Kubernetes Events.
+- [x] Clean-up of generated VAP objects (owner references; deleted on switch to Webhook or invalid policy).
+- [x] Compile rules to `ValidatingAdmissionPolicy` + binding (`enforcement: Native`, all-or-nothing per
+      policy; see decision 0005). `allowedRegistries` is webhook-only for now.
+- [x] Background scanner: evaluate existing workloads on a schedule and on policy change; results
+      in policy status.
+- [ ] Write `PolicyReport` / `ClusterPolicyReport`.
+- [x] Exponential backoff in `error_policy`, shared context (client, metrics, config), graceful shutdown.
+- [x] Leader election (Lease; 2 operator replicas, failover in ~2 s on rollout).
 
 Webhook (`ferrogate-webhook`)
-- [ ] Real `AdmissionReview` v1 handling: allow/deny with message, `warnings` for `Warn` mode.
-- [ ] TLS via cert-manager, or built-in self-signed CA with rotation and `caBundle` patching.
-- [ ] Timeouts, request size limits, configurable `failurePolicy` (default `Ignore`).
+- [x] Real `AdmissionReview` v1 handling: allow/deny with message, `warnings` for `Warn` mode,
+      `auditAnnotations` for `Audit` mode.
+- [x] TLS via cert-manager (CA chain; serving certificate reloaded without restart; rotation tested
+      under load with no fail-open window).
+- [ ] Built-in self-signed CA with rotation and `caBundle` patching (for clusters without cert-manager).
+- [x] Timeouts, request size limits, concurrency limit, `failurePolicy: Ignore` by default.
 
 Observability
-- [ ] Prometheus `/metrics`: reconcile count/duration/errors, admission requests by verdict and
+- [x] Prometheus `/metrics`: reconcile count/duration/errors, admission requests by verdict and
       latency histogram, violations by policy/severity.
-- [ ] `/healthz`, `/readyz` (ready only after caches sync and certificates load).
-- [ ] JSON logs, OpenTelemetry tracing (OTLP exporter, off by default).
+- [x] `/healthz`, `/readyz` (ready only after caches sync and certificates load).
+- [x] JSON logs.
+- [ ] OpenTelemetry tracing (OTLP exporter, off by default).
 
 Testing
 - [ ] Unit tests in `ferrogate-core` (target > 80% line coverage, measured with `cargo llvm-cov`).
-- [ ] Golden-file tests: `policies/<pack>/fixtures/{pass,fail}/*.yaml` with expected verdicts.
-- [ ] Controller tests with a mocked API server (`tower-test`).
-- [ ] End-to-end tests on **kind** in CI, and against a real multi-node cluster (homelab k3s) before
+- [x] Golden-file tests: `policies/<pack>/fixtures/{pass,fail}/*.yaml` with expected verdicts.
+- [x] Controller tests with a mocked API server (`tower-test`): reconcile, status, events, back-off and leader election.
+- [x] End-to-end tests on **kind** in CI, and against a real multi-node cluster (homelab k3s) before
       each release: install chart, apply policies, assert allowed/denied
       resources and generated reports. Test against the three most recent Kubernetes minor versions.
 
 **Exit:** `v0.1.0` — install on kind in five minutes, audit and enforce a PSS-restricted pack.
 
-### Phase C — Enterprise readiness (2–3 weeks)
+### Phase C — Enterprise readiness (2–3 weeks) — started
 
 Packaging
-- [ ] Multi-stage `Dockerfile` → distroless/static, non-root UID, read-only root filesystem,
-      multi-arch (amd64, arm64) via `docker buildx`.
-- [ ] Helm chart in `charts/`: values schema (`values.schema.json`), PodDisruptionBudget,
-      anti-affinity, resource requests/limits, NetworkPolicy, ServiceMonitor, optional cert-manager.
-      Published as an OCI chart to GHCR. Chart tests with `helm unittest` and `ct lint`.
-- [ ] Kustomize bases under `config/` for non-Helm users.
+- [x] Multi-stage `Dockerfile` → distroless, non-root UID, read-only root filesystem.
+- [x] Multi-arch (amd64, arm64) via `docker buildx` (release image from the static release binaries).
+- [x] Helm chart in `charts/`: values schema (`values.schema.json`), PodDisruptionBudget,
+      anti-affinity, resource requests/limits, NetworkPolicy, ServiceMonitor, cert-manager. CI lints,
+      renders, rejects invalid values and runs the e2e test with the chart.
+- [ ] Publish as an OCI chart to GHCR; `helm unittest` and `ct lint`.
+- [x] Kustomize bases under `config/` for non-Helm users.
 
 Security and supply chain
-- [ ] Least-privilege `ClusterRole` per component; document each permission in `docs/rbac.md`.
+- [x] Least-privilege `ClusterRole` per component; document each permission in `docs/rbac.md`.
 - [ ] `cargo deny` (licenses, advisories, bans), `cargo audit`, Trivy/Grype image scanning.
-- [ ] Sign images and charts with cosign (keyless, GitHub OIDC); attach SBOM (syft) and SLSA
-      provenance (`slsa-github-generator`).
-- [ ] Renovate or Dependabot for Cargo, GitHub Actions and the Dockerfile; pin actions by SHA.
+- [x] Sign images and charts with cosign (keyless, GitHub OIDC); SBOM and SLSA provenance
+      attestations from buildx and `actions/attest-build-provenance` (in `release.yml`, not yet run
+      for a real tag).
+- [x] Renovate or Dependabot for Cargo, GitHub Actions and the Dockerfile; pin actions by SHA.
 - [ ] OpenSSF Scorecard workflow and badge; aim for the OpenSSF Best Practices badge.
-- [ ] Threat model in `docs/security/threat-model.md`.
+- [x] Threat model in `docs/security/threat-model.md`.
 
 Releases (tag-driven, like WorriorVex)
-- [ ] Pushing `vX.Y.Z` runs: tests → binaries (linux/macOS/windows, amd64/arm64) → image → chart →
-      `kubectl-ferrogate` → GitHub release with checksums, SBOM and signatures.
+- [x] Pushing `vX.Y.Z` runs: version checks → binaries (linux amd64/arm64 static, macOS arm64) →
+      e2e on kind with the release binary → signed multi-arch image → signed OCI chart → draft
+      GitHub release with checksums and an install manifest pinned by digest.
+- [ ] Windows binary and `kubectl-ferrogate`.
 - [ ] `release-plz` (or `cargo-dist`) generates the changelog from Conventional Commits and bumps versions.
 - [ ] Distribute the CLI through Krew and a Homebrew tap.
-- [ ] Version shown in `ferrogate --version` and logs comes from the tag.
-- [ ] `docs/release.md` describing the process and what is built.
+- [x] Version shown in `ferrogate --version` and logs comes from the tag (the workflow refuses tags
+      that differ from `Cargo.toml` and `Chart.yaml`).
+- [x] `docs/release.md` describing the process and what is built.
 
 Operations
 - [ ] `docs/operations/`: upgrade guide, HA setup, sizing, failure modes, runbooks for common alerts.

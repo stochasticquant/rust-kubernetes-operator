@@ -1,0 +1,83 @@
+{{- $name := include "ferrogate.fullname" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}-operator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ferrogate.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+spec:
+  replicas: {{ .Values.operator.replicas }}
+  selector:
+    matchLabels: {{- include "ferrogate.selector" (list . "operator") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "ferrogate.selector" (list . "operator") | nindent 8 }}
+      {{- with .Values.operator.podAnnotations }}
+      annotations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ $name }}-operator
+      terminationGracePeriodSeconds: 15
+      {{- include "ferrogate.podSecurity" . | nindent 6 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.operator.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.operator.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      affinity:
+        {{- if .Values.operator.affinity }}
+        {{- toYaml .Values.operator.affinity | nindent 8 }}
+        {{- else }}
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels: {{- include "ferrogate.selector" (list . "operator") | nindent 20 }}
+        {{- end }}
+      containers:
+        - name: operator
+          image: {{ include "ferrogate.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - operator
+            - --leader-elect
+            - --log-format={{ .Values.logFormat }}
+            - --scan-interval={{ .Values.operator.scan.intervalSeconds }}
+            - --max-scan-objects={{ .Values.operator.scan.maxObjects }}
+            {{- if not .Values.operator.scan.enabled }}
+            - --no-scan
+            {{- end }}
+          env:
+            - name: FERROGATE_LOG
+              value: {{ .Values.logLevel | quote }}
+            - name: POD_NAME
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+            - name: POD_NAMESPACE
+              valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
+          ports: [{name: metrics, containerPort: 8080}]
+          livenessProbe: {httpGet: {path: /healthz, port: metrics}, periodSeconds: 20}
+          readinessProbe: {httpGet: {path: /readyz, port: metrics}, periodSeconds: 10}
+          resources: {{- toYaml .Values.operator.resources | nindent 12 }}
+          {{- include "ferrogate.containerSecurity" . | nindent 10 }}
+{{- if .Values.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}-operator
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "ferrogate.labels" . | nindent 4 }}
+spec:
+  # maxUnavailable (not minAvailable) so a single-replica install never blocks node drains.
+  maxUnavailable: 1
+  selector:
+    matchLabels: {{- include "ferrogate.selector" (list . "operator") | nindent 6 }}
+{{- end }}

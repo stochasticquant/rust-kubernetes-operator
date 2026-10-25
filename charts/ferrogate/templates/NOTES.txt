@@ -1,0 +1,13 @@
+Ferrogate {{ .Chart.AppVersion }} is installed in namespace {{ .Release.Namespace }}.
+
+Check it is running:
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+
+Start with a policy pack in Audit mode (nothing is blocked):
+  kubectl apply -f https://raw.githubusercontent.com/stochasticquant/rust-kubernetes-operator/main/policies/pss-baseline/policy.yaml
+  kubectl get cgp
+
+{{- if not .Values.webhook.enabled }}
+
+The admission webhook is disabled: only policies with `enforcement: Native` are enforced at admission.
+{{- end }}

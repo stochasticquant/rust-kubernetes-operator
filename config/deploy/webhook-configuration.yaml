@@ -1,0 +1,44 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: ferrogate
+  annotations:
+    # The CA certificate, not the serving one: it does not change when the serving cert is renewed.
+    cert-manager.io/inject-ca-from: ferrogate-system/ferrogate-ca
+webhooks:
+  - name: validate.ferrogate.stochasticquant.io
+    admissionReviewVersions: [v1]
+    sideEffects: None
+    # Fail open by default (accepted risk R-2): an outage never blocks the cluster.
+    failurePolicy: Ignore
+    timeoutSeconds: 5
+    matchPolicy: Equivalent
+    clientConfig:
+      service:
+        name: ferrogate-webhook
+        namespace: ferrogate-system
+        path: /validate
+        port: 443
+    # Never intercept the control plane or Ferrogate itself.
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [kube-system, kube-node-lease, ferrogate-system]
+    # Workload kinds. Add kinds here when policies match other resources (see docs/install.md).
+    rules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        resources: [pods, replicationcontrollers]
+        operations: [CREATE, UPDATE]
+        scope: Namespaced
+      - apiGroups: [apps]
+        apiVersions: [v1]
+        resources: [deployments, statefulsets, daemonsets, replicasets]
+        operations: [CREATE, UPDATE]
+        scope: Namespaced
+      - apiGroups: [batch]
+        apiVersions: [v1]
+        resources: [jobs, cronjobs]
+        operations: [CREATE, UPDATE]
+        scope: Namespaced

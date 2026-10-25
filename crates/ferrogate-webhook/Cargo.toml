@@ -1,6 +1,6 @@
 [package]
 name = "ferrogate-webhook"
-description = "Ferrogate admission webhook HTTP handlers"
+description = "Ferrogate admission webhook: AdmissionReview handling, TLS, health and metrics"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,11 +11,22 @@ publish.workspace = true
 
 [dependencies]
 axum.workspace = true
+axum-server.workspace = true
+ferrogate-core.workspace = true
+prometheus-client.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 http-body-util.workspace = true
-tokio.workspace = true
-tower.workspace = true
+proptest.workspace = true
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem", "ring"] }
 
 [lints]
 workspace = true
