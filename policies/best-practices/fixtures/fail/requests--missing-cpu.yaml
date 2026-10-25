@@ -1,0 +1,11 @@
+apiVersion: batch/v1
+kind: Job
+metadata: {name: migrate, namespace: default}
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: ghcr.io/acme/migrate:2.1.0
+          resources: {requests: {memory: 64Mi}, limits: {memory: 128Mi}}

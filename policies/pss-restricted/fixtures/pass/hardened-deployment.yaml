@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: api, namespace: default}
+spec:
+  selector: {matchLabels: {app: api}}
+  template:
+    metadata: {labels: {app: api}}
+    spec:
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: api
+          image: ghcr.io/acme/api:1.0.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities: {drop: [ALL]}

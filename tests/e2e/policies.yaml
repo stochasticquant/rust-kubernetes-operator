@@ -1,0 +1,39 @@
+# Test policies for tests/e2e/run.sh. They only match the ferrogate-e2e namespace.
+apiVersion: ferrogate.stochasticquant.io/v1alpha1
+kind: ClusterGatePolicy
+metadata: {name: e2e-enforce}
+spec:
+  mode: Enforce
+  severity: High
+  match:
+    resources:
+      - apiGroups: ["", apps]
+        kinds: [Pod, Deployment]
+    namespaces: [ferrogate-e2e]
+  rules:
+    - name: no-latest
+      disallowLatestTag: true
+---
+apiVersion: ferrogate.stochasticquant.io/v1alpha1
+kind: ClusterGatePolicy
+metadata: {name: e2e-warn}
+spec:
+  mode: Warn
+  match:
+    resources: [{kinds: [Pod]}]
+    namespaces: [ferrogate-e2e]
+  rules:
+    - name: memory-limits
+      requireResourceLimits: [memory]
+---
+# Passes schema validation but not Ferrogate's: `false` is not allowed for checks.
+apiVersion: ferrogate.stochasticquant.io/v1alpha1
+kind: ClusterGatePolicy
+metadata: {name: e2e-invalid}
+spec:
+  match:
+    resources: [{kinds: [Pod]}]
+    namespaces: [ferrogate-e2e]
+  rules:
+    - name: disabled-check
+      disallowPrivileged: false

@@ -1,0 +1,51 @@
+# Webhook TLS from cert-manager.
+#
+# A long-lived CA (self-signed, 10 years) issues the short-lived serving certificate (90 days).
+# Renewing the serving certificate does not change the CA, so the CA bundle that cainjector puts
+# into the webhook configuration stays valid while the webhook reloads the new certificate from
+# disk. (With a self-signed serving certificate, every renewal would change the CA and admission
+# would fail open until the pods picked up the new files.)
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: ferrogate-selfsigned
+  namespace: ferrogate-system
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ferrogate-ca
+  namespace: ferrogate-system
+spec:
+  isCA: true
+  commonName: ferrogate-webhook-ca
+  secretName: ferrogate-ca
+  duration: 87600h   # 10 years
+  privateKey: {algorithm: ECDSA, size: 256}
+  issuerRef: {name: ferrogate-selfsigned, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: ferrogate-ca
+  namespace: ferrogate-system
+spec:
+  ca:
+    secretName: ferrogate-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ferrogate-webhook
+  namespace: ferrogate-system
+spec:
+  secretName: ferrogate-webhook-tls
+  duration: 2160h    # 90 days
+  renewBefore: 360h  # 15 days
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames:
+    - ferrogate-webhook.ferrogate-system.svc
+    - ferrogate-webhook.ferrogate-system.svc.cluster.local
+  issuerRef: {name: ferrogate-ca, kind: Issuer}

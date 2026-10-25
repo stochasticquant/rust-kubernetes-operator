@@ -1,0 +1,46 @@
+# Pod Security Standards: baseline.
+# Blocks known privilege escalations while allowing common workloads.
+# https://kubernetes.io/docs/concepts/security/pod-security-standards/#baseline
+apiVersion: ferrogate.stochasticquant.io/v1alpha1
+kind: ClusterGatePolicy
+metadata:
+  name: pss-baseline
+  annotations:
+    ferrogate.stochasticquant.io/pack: pss-baseline
+spec:
+  mode: Audit
+  severity: High
+  match:
+    resources:
+      - apiGroups: [""]
+        kinds: [Pod, ReplicationController]
+      - apiGroups: [apps]
+        kinds: [Deployment, StatefulSet, DaemonSet, ReplicaSet]
+      - apiGroups: [batch]
+        kinds: [Job, CronJob]
+  exclude:
+    namespaces: [kube-system]
+  rules:
+    - name: privileged
+      disallowPrivileged: true
+    - name: host-namespaces
+      disallowHostNamespaces: true
+    - name: host-path
+      disallowHostPath: true
+    - name: host-ports
+      disallowHostPorts: true
+    - name: capabilities
+      allowedCapabilities:
+        - AUDIT_WRITE
+        - CHOWN
+        - DAC_OVERRIDE
+        - FOWNER
+        - FSETID
+        - KILL
+        - MKNOD
+        - NET_BIND_SERVICE
+        - SETFCAP
+        - SETGID
+        - SETPCAP
+        - SETUID
+        - SYS_CHROOT

@@ -1,0 +1,10 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: sniff, namespace: default}
+spec:
+  selector: {matchLabels: {app: sniff}}
+  template:
+    metadata: {labels: {app: sniff}}
+    spec:
+      hostNetwork: true
+      containers: [{name: sniff, image: busybox:1.36}]

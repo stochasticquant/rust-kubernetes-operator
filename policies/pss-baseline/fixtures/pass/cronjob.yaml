@@ -1,0 +1,12 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata: {name: report, namespace: default}
+spec:
+  schedule: "0 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers: [{name: report, image: busybox:1.36, command: [date]}]
+          volumes: [{name: tmp, emptyDir: {}}]

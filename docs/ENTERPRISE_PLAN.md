@@ -214,37 +214,43 @@ Open-source hygiene
 
 **Exit:** clean repo, all community files, workspace builds, CI green.
 
-### Phase B — Working core product (3–5 weeks)
+### Phase B — Working core product (3–5 weeks) — in progress
 
 Engine (`ferrogate-core`)
-- [ ] Rule types: required labels/annotations, image registry allow-list, disallow `:latest`,
-      resource limits required, privileged/hostPath/hostNetwork checks, CEL expressions (`cel` crate).
-- [ ] Match/exclude logic (kinds, namespaces, selectors, subjects).
-- [ ] Verdict type with rule name, message, severity, JSON path.
+- [x] Rule types: required labels/annotations, image registry allow-list, disallow `:latest`,
+      resource limits/requests required, Pod Security Standards baseline and restricted checks.
+- [ ] CEL expressions (`cel` crate).
+- [x] Match/exclude logic (kinds, namespaces, selectors, subjects).
+- [x] Verdict type with rule name, message, severity, field path.
 
 Controller (`ferrogate-operator`)
-- [ ] Reconcile policies: validate, compile, write `status.conditions`, emit Kubernetes Events.
+- [x] Reconcile policies: validate, compile, write `status.conditions`, emit Kubernetes Events.
 - [ ] Finalizers to clean up generated VAP objects and reports.
 - [ ] Compile CEL-expressible rules to `ValidatingAdmissionPolicy` + binding; mark the rest for webhook.
-- [ ] Background scanner: evaluate existing workloads on a schedule and on policy change; write
-      `PolicyReport` / `ClusterPolicyReport`.
-- [ ] Leader election, exponential backoff in `error_policy`, shared context (`Arc<Context>` with
-      client, metrics, config), graceful shutdown.
+- [x] Background scanner: evaluate existing workloads on a schedule and on policy change; results
+      in policy status.
+- [ ] Write `PolicyReport` / `ClusterPolicyReport`.
+- [x] Exponential backoff in `error_policy`, shared context (client, metrics, config), graceful shutdown.
+- [ ] Leader election (the operator runs as a single replica until then).
 
 Webhook (`ferrogate-webhook`)
-- [ ] Real `AdmissionReview` v1 handling: allow/deny with message, `warnings` for `Warn` mode.
-- [ ] TLS via cert-manager, or built-in self-signed CA with rotation and `caBundle` patching.
-- [ ] Timeouts, request size limits, configurable `failurePolicy` (default `Ignore`).
+- [x] Real `AdmissionReview` v1 handling: allow/deny with message, `warnings` for `Warn` mode,
+      `auditAnnotations` for `Audit` mode.
+- [x] TLS via cert-manager (CA chain; serving certificate reloaded without restart; rotation tested
+      under load with no fail-open window).
+- [ ] Built-in self-signed CA with rotation and `caBundle` patching (for clusters without cert-manager).
+- [x] Timeouts, request size limits, concurrency limit, `failurePolicy: Ignore` by default.
 
 Observability
-- [ ] Prometheus `/metrics`: reconcile count/duration/errors, admission requests by verdict and
+- [x] Prometheus `/metrics`: reconcile count/duration/errors, admission requests by verdict and
       latency histogram, violations by policy/severity.
-- [ ] `/healthz`, `/readyz` (ready only after caches sync and certificates load).
-- [ ] JSON logs, OpenTelemetry tracing (OTLP exporter, off by default).
+- [x] `/healthz`, `/readyz` (ready only after caches sync and certificates load).
+- [x] JSON logs.
+- [ ] OpenTelemetry tracing (OTLP exporter, off by default).
 
 Testing
 - [ ] Unit tests in `ferrogate-core` (target > 80% line coverage, measured with `cargo llvm-cov`).
-- [ ] Golden-file tests: `policies/<pack>/fixtures/{pass,fail}/*.yaml` with expected verdicts.
+- [x] Golden-file tests: `policies/<pack>/fixtures/{pass,fail}/*.yaml` with expected verdicts.
 - [ ] Controller tests with a mocked API server (`tower-test`).
 - [ ] End-to-end tests on **kind** in CI, and against a real multi-node cluster (homelab k3s) before
       each release: install chart, apply policies, assert allowed/denied
