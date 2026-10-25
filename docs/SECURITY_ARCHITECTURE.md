@@ -38,10 +38,10 @@ and safe when it fails.
 ```text
             ┌──────────────────────────── Kubernetes cluster ────────────────────────────┐
             │                                                                            │
- user ──►   │  kube-apiserver ──(1) TLS──► guardian-webhook  (namespace: guardian-system)│
+ user ──►   │  kube-apiserver ──(1) TLS──► ferrogate-webhook  (namespace: ferrogate-system)│
  kubectl    │       │  ▲                        │                                       │
             │       │  │                        │ reads policies (cache)                │
-            │       │  └──(2) TLS + SA token ── guardian-operator ──► PolicyReports      │
+            │       │  └──(2) TLS + SA token ── ferrogate-operator ──► PolicyReports      │
             │       │                           │   └─► ValidatingAdmissionPolicy objects│
             │       └─(3) native VAP enforcement (in-process, no webhook hop)            │
             │                                                                            │
@@ -69,10 +69,10 @@ and safe when it fails.
 | **Repudiation** | "Who allowed this privileged pod?" | Structured audit log of every admission decision (policy, rule, user, resource, verdict); PolicyReports; Kubernetes Events |
 | **Information disclosure** | Logging full objects including secrets in env vars | Logs record resource identity and verdict only, never object bodies; operator has no RBAC to read `Secrets`; webhook rules exclude `Secret` and `ConfigMap` by default |
 | **Denial of service** | Expensive CEL or huge objects slowing admission | CEL cost limits; request body size limit; per-request timeout (default 5 s, well below the API server's 10 s); concurrency limit; `failurePolicy: Ignore` default; HPA + PDB + multiple replicas |
-| **Denial of service** | Webhook outage blocks system components | Default exclusion of `kube-system`, `guardian-system` and other system namespaces; `namespaceSelector` and `objectSelector` on the webhook configuration |
+| **Denial of service** | Webhook outage blocks system components | Default exclusion of `kube-system`, `ferrogate-system` and other system namespaces; `namespaceSelector` and `objectSelector` on the webhook configuration |
 | **Elevation of privilege** | Compromised operator pod used to escalate | Non-root, read-only root filesystem, all capabilities dropped, `seccompProfile: RuntimeDefault`, no privilege escalation; RBAC without `escalate`/`bind`/`impersonate`; ServiceAccount token auto-mount only where needed |
 
-The full, maintained threat model lives in `docs/security/threat-model.md` *(planned)* and is reviewed
+The full, maintained threat model lives in [`security/threat-model.md`](security/threat-model.md) and is reviewed
 on every minor release.
 
 ## 5. Component security
@@ -110,14 +110,14 @@ on every minor release.
 
 | Component | Resources | Verbs |
 | --- | --- | --- |
-| Operator | guardian policies (CRDs) | get, list, watch |
-| Operator | guardian policies `/status` | update, patch |
+| Operator | Ferrogate policies (CRDs) | get, list, watch |
+| Operator | Ferrogate policies `/status` | update, patch |
 | Operator | `validatingadmissionpolicies`, `...bindings` | get, list, watch, create, update, patch, delete — restricted to objects with the operator's label where the API allows it |
 | Operator | `policyreports`, `clusterpolicyreports` | get, list, watch, create, update, patch, delete |
 | Operator | workloads to scan (pods, deployments, ...) | get, list, watch (read-only) |
 | Operator | `events` | create, patch |
 | Operator | `leases` in its own namespace | get, create, update |
-| Webhook | guardian policies | get, list, watch |
+| Webhook | Ferrogate policies | get, list, watch |
 | Webhook | its TLS Secret in its own namespace | get, update (self-signed mode only) |
 
 Never granted: `secrets` cluster-wide, `*` wildcards, `escalate`, `bind`, `impersonate`, `pods/exec`.
@@ -162,7 +162,7 @@ automountServiceAccountToken: true   # only on pods that need API access
 Users can verify a release:
 
 ```bash
-cosign verify ghcr.io/stochasticquant/guardian:v0.1.0 \
+cosign verify ghcr.io/stochasticquant/ferrogate:v0.1.0 \
   --certificate-identity-regexp 'https://github.com/stochasticquant/.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```

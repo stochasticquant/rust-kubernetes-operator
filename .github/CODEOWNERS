@@ -1,0 +1,12 @@
+# Default owner for everything.
+*                                   @stochasticquant
+
+# Security-sensitive paths: changes here need a maintainer's security review.
+/crates/ferrogate-webhook/          @stochasticquant
+/crates/ferrogate-crd/              @stochasticquant
+/config/                            @stochasticquant
+/.github/workflows/                 @stochasticquant
+/deny.toml                          @stochasticquant
+/SECURITY.md                        @stochasticquant
+/docs/SECURITY_ARCHITECTURE.md      @stochasticquant
+/docs/security/                     @stochasticquant

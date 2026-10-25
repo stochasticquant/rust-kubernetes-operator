@@ -1,0 +1,20 @@
+[package]
+name = "ferrogate-operator"
+description = "Ferrogate controller: reconciles Ferrogate policies"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+ferrogate-crd.workspace = true
+futures.workspace = true
+kube.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

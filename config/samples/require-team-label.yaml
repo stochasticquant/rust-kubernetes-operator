@@ -1,0 +1,11 @@
+# Example policy: every matched resource must carry a `team` label.
+# Audit mode only reports violations; nothing is blocked.
+apiVersion: ferrogate.stochasticquant.io/v1alpha1
+kind: ClusterGatePolicy
+metadata:
+  name: require-team-label
+spec:
+  mode: Audit
+  severity: Medium
+  requireLabels:
+    - team
