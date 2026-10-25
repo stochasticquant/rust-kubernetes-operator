@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use ferrogate_core::Policy;
 use ferrogate_operator::cache::Caches;
+use ferrogate_operator::leader::{self, LeaseConfig};
 use ferrogate_webhook::{Limits, PolicySource, TlsFiles, WebhookMetrics};
 use prometheus_client::registry::Registry;
 use tokio::sync::watch;
@@ -76,15 +77,18 @@ async fn wait_for_signal() {
     }
 }
 
-/// Runs the controller and its operations server.
+/// Runs the controller and its operations server. With `lease`, waits to be elected first and
+/// stops with an error if leadership is lost, so a deposed replica never keeps reconciling.
 pub async fn operator(
     client: kube::Client,
     config: ferrogate_operator::Config,
     metrics_addr: SocketAddr,
+    lease: Option<LeaseConfig>,
 ) -> anyhow::Result<()> {
     let shutdown = Shutdown::on_signals();
     let mut registry = Registry::default();
     let metrics = ferrogate_operator::OperatorMetrics::register(&mut registry);
+    // Standby replicas are healthy and ready: readiness says "can take over", not "is leader".
     let ops = ferrogate_webhook::ops_router(Arc::new(registry), Arc::new(|| true));
     let ops_server = tokio::spawn(ferrogate_webhook::serve_plain(
         metrics_addr,
@@ -92,9 +96,49 @@ pub async fn operator(
         shutdown.clone().wait(),
     ));
 
-    ferrogate_operator::run(client, config, metrics).await;
+    let result = match lease {
+        None => {
+            ferrogate_operator::run(client, config, metrics).await;
+            Ok(())
+        }
+        Some(lease) => run_elected(client, config, metrics, lease, shutdown.clone()).await,
+    };
     ops_server.await??;
-    Ok(())
+    result
+}
+
+async fn run_elected(
+    client: kube::Client,
+    config: ferrogate_operator::Config,
+    metrics: ferrogate_operator::OperatorMetrics,
+    lease: LeaseConfig,
+    shutdown: Shutdown,
+) -> anyhow::Result<()> {
+    let (tx, mut leader) = watch::channel(false);
+    let mut election = tokio::spawn(leader::run(client.clone(), lease.clone(), tx));
+    tracing::info!(lease = %lease.name, identity = %lease.identity, "waiting for leadership");
+    tokio::select! {
+        elected = leader.wait_for(|is_leader| *is_leader) => {
+            if elected.is_err() {
+                anyhow::bail!("leader election stopped");
+            }
+        }
+        () = shutdown.clone().wait() => {
+            election.abort();
+            return Ok(());
+        }
+    }
+
+    let result = tokio::select! {
+        () = ferrogate_operator::run(client.clone(), config, metrics) => Ok(()),
+        lost = &mut election => match lost {
+            Ok(error) => Err(anyhow::Error::new(error).context("stopping so that only the new leader reconciles")),
+            Err(join) => Err(anyhow::anyhow!("leader election task failed: {join}")),
+        },
+    };
+    election.abort();
+    leader::release(client, &lease).await;
+    result
 }
 
 /// Runs the admission webhook, its watch caches and its operations server.

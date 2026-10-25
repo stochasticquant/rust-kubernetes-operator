@@ -34,7 +34,7 @@ and compiles policies to native Kubernetes admission where it can.
   `kubectl`, `Audit` writes to the API server audit log. HTTPS with cert-manager, certificate
   reloaded without restarts, request size, time and concurrency limits.
 - **Operator:** `Ready`/`Scanned` conditions, background scans of existing workloads with violation
-  counts and sample results, Kubernetes Events, exponential back-off.
+  counts and sample results, Kubernetes Events, exponential back-off, leader election (2 replicas).
 - **Policy packs:** [`pss-baseline`, `pss-restricted`, `best-practices`](policies/), each with
   tested fixtures.
 - **`ferrogate check`:** test policies against local YAML in CI, without a cluster.
@@ -43,7 +43,7 @@ and compiles policies to native Kubernetes admission where it can.
   restricted-PSS deployment.
 
 Not yet: `ValidatingAdmissionPolicy` compilation, CEL rules, PolicyReports, namespaced policies,
-leader election (the operator runs as one replica), Helm chart, signed releases.
+Helm chart, signed releases.
 
 ## Quick start
 

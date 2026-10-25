@@ -231,7 +231,7 @@ Controller (`ferrogate-operator`)
       in policy status.
 - [ ] Write `PolicyReport` / `ClusterPolicyReport`.
 - [x] Exponential backoff in `error_policy`, shared context (client, metrics, config), graceful shutdown.
-- [ ] Leader election (the operator runs as a single replica until then).
+- [x] Leader election (Lease; 2 operator replicas, failover in ~2 s on rollout).
 
 Webhook (`ferrogate-webhook`)
 - [x] Real `AdmissionReview` v1 handling: allow/deny with message, `warnings` for `Warn` mode,
@@ -251,8 +251,8 @@ Observability
 Testing
 - [ ] Unit tests in `ferrogate-core` (target > 80% line coverage, measured with `cargo llvm-cov`).
 - [x] Golden-file tests: `policies/<pack>/fixtures/{pass,fail}/*.yaml` with expected verdicts.
-- [ ] Controller tests with a mocked API server (`tower-test`).
-- [ ] End-to-end tests on **kind** in CI, and against a real multi-node cluster (homelab k3s) before
+- [x] Controller tests with a mocked API server (`tower-test`): reconcile, status, events, back-off and leader election.
+- [x] End-to-end tests on **kind** in CI, and against a real multi-node cluster (homelab k3s) before
       each release: install chart, apply policies, assert allowed/denied
       resources and generated reports. Test against the three most recent Kubernetes minor versions.
 

@@ -7,8 +7,14 @@
 //! It also provides the watch caches the admission webhook reads ([`cache::Caches`]).
 
 pub mod cache;
+pub mod leader;
 pub mod metrics;
 pub mod scan;
+
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod reconcile_tests;
 
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -141,7 +147,7 @@ async fn reconcile(policy: Arc<ClusterGatePolicy>, ctx: Arc<Context>) -> Result<
     result.map(|(action, _)| action)
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Outcome {
     Unchanged,
     Invalid,

@@ -39,6 +39,15 @@ for _ in $(seq 1 30); do
 done
 [[ -n "$bundle" ]] && ok "CA bundle injected" || bad "CA bundle not injected"
 
+holder=""
+for _ in $(seq 1 30); do
+  holder=$(kubectl -n ferrogate-system get lease ferrogate-operator -o jsonpath='{.spec.holderIdentity}' 2>/dev/null || true)
+  [[ -n "$holder" ]] && break
+  sleep 1
+done
+kubectl -n ferrogate-system get pod "$holder" >/dev/null 2>&1 \
+  && ok "one operator replica holds the leader lease ($holder)" || bad "no leader elected"
+
 echo "==> Applying test policies"
 # A previous run may still be deleting the namespace.
 kubectl wait --for=delete "namespace/$NS" --timeout=180s >/dev/null 2>&1 || true

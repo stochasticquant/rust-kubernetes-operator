@@ -17,7 +17,7 @@ kubectl -n ferrogate-system rollout status deploy/ferrogate-operator
 ```
 
 This creates the CRD, the `ferrogate-system` namespace (restricted Pod Security), RBAC, the
-operator (1 replica), the webhook (2 replicas, PDB), a self-signed serving certificate from
+operator (2 replicas with leader election, PDB), the webhook (2 replicas, PDB), a self-signed serving certificate from
 cert-manager, and the `ValidatingWebhookConfiguration`.
 
 ## First policy
@@ -57,6 +57,7 @@ The webhook configuration:
 | `operator --scan-interval` | `FERROGATE_SCAN_INTERVAL` | `300` | seconds between scans (min 30) |
 | `operator --no-scan` | `FERROGATE_NO_SCAN` | off | disable background scans |
 | `operator --max-scan-objects` | `FERROGATE_MAX_SCAN_OBJECTS` | `20000` | per policy and scan |
+| `operator --leader-elect` | `FERROGATE_LEADER_ELECT` | off (on in the manifests) | Lease `ferrogate-operator` in `POD_NAMESPACE`; needs `POD_NAME` |
 | `webhook --tls-cert/--tls-key` | `FERROGATE_TLS_CERT/KEY` | `/tls/tls.crt`, `/tls/tls.key` | reloaded on change |
 | `webhook --max-body-bytes` | `FERROGATE_MAX_BODY_BYTES` | 7 MiB | |
 | `--metrics-addr` | `FERROGATE_METRICS_ADDR` | `0.0.0.0:8080` | `/healthz`, `/readyz`, `/metrics` |

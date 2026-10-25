@@ -13,6 +13,7 @@ The manifests are in [`config/deploy/rbac.yaml`](../config/deploy/rbac.yaml).
 | `events.k8s.io` | `events` | create, patch | Report transitions as Kubernetes Events |
 | `""` | `namespaces` | list, watch | Namespace labels for `namespaceSelector` (metadata only) |
 | via `ferrogate-scan` | workload kinds (below) | list | Background scans |
+| `coordination.k8s.io` (Role in `ferrogate-system`) | `leases` | create; get, update on `ferrogate-operator` only | Leader election |
 
 `ferrogate-scan` is an **aggregated** ClusterRole. The built-in `ferrogate-scan-workloads` grants
 `list` on Pods, ReplicationControllers, Deployments, StatefulSets, DaemonSets, ReplicaSets, Jobs and
