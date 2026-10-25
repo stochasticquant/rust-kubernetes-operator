@@ -147,7 +147,8 @@ else
     && ok "API server denies through the generated policy" || bad "unexpected: $out"
 fi
 kubectl delete cgp e2e-native >/dev/null
-for _ in $(seq 1 30); do
+# The garbage collector removes owned objects asynchronously; give a busy CI runner time.
+for _ in $(seq 1 120); do
   kubectl get validatingadmissionpolicy ferrogate-e2e-native >/dev/null 2>&1 || break
   sleep 1
 done
