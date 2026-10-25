@@ -34,6 +34,8 @@ All notable changes to Ferrogate are listed here. The format follows
 - Helm chart (`charts/ferrogate`) with a values schema, optional `ServiceMonitor`, and the same
   hardening as the Kustomize install; CI runs the e2e test with both.
 - `Makefile` with the common development tasks.
+- Tag-driven release workflow: static binaries with provenance, signed multi-arch image with SBOM
+  and provenance, signed OCI Helm chart, and a draft GitHub release; see `docs/release.md`.
 - Leader election through a Lease (`--leader-elect`); the manifests run two operator replicas.
 - Property-based robustness tests for the engine and the admission endpoint; coverage report in CI.
 - `ferrogate crd` prints the custom resource definitions; the generated YAML is in `config/crd/`.
