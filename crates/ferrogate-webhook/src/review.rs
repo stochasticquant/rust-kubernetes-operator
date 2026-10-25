@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use ferrogate_core::{Decision, Policy, PolicyResult, Requester, Resource, decide};
+use ferrogate_core::{Decision, Enforcement, Policy, PolicyResult, Requester, Resource, decide};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -156,7 +156,11 @@ pub fn admit(
         requester: Some(&requester),
         object,
     };
-    let decision = decide(policies, &resource);
+    // Native policies are evaluated by the API server through their ValidatingAdmissionPolicy.
+    let webhook_policies = policies
+        .iter()
+        .filter(|p| p.enforcement == Enforcement::Webhook);
+    let decision = decide(webhook_policies, &resource);
     if decision.passed == 0 && decision.failures().next().is_none() {
         return (allow, Outcome::Skipped, decision);
     }
@@ -311,6 +315,21 @@ mod tests {
         assert_eq!(json["response"]["allowed"], false);
         assert_eq!(json["response"]["status"]["code"], 403);
         assert!(json["response"].get("warnings").is_none());
+    }
+
+    #[test]
+    fn native_policies_are_left_to_the_api_server() {
+        let spec: PolicySpec = serde_json::from_value(json!({
+            "mode": "Enforce",
+            "enforcement": "Native",
+            "match": {"resources": [{"kinds": ["Pod"]}]},
+            "rules": [{"name": "no-latest", "disallowLatestTag": true}]
+        }))
+        .unwrap();
+        let native = Policy::compile("native", &spec).unwrap();
+        let (response, outcome, _) = admit(&request("CREATE", "nginx"), &[native], None);
+        assert!(response.allowed);
+        assert_eq!(outcome, Outcome::Skipped);
     }
 
     #[test]

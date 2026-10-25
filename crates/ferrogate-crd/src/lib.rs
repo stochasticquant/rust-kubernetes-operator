@@ -5,7 +5,7 @@
 //! API group: `ferrogate.stochasticquant.io`. Version `v1alpha1`: fields may still change between
 //! releases. See `docs/decisions/0003-api-group-and-versioning.md`.
 
-use ferrogate_core::{CompileError, Policy, PolicySpec, Severity};
+use ferrogate_core::{CompileError, Enforcement, Policy, PolicySpec, Severity};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition;
 use kube::{CustomResource, ResourceExt};
 use schemars::JsonSchema;
@@ -29,6 +29,7 @@ pub const MAX_STATUS_RESULTS: usize = 20;
     status = "ClusterGatePolicyStatus",
     printcolumn = r#"{"name":"Mode","type":"string","jsonPath":".spec.mode"}"#,
     printcolumn = r#"{"name":"Severity","type":"string","jsonPath":".spec.severity"}"#,
+    printcolumn = r#"{"name":"Enforcement","type":"string","jsonPath":".spec.enforcement","priority":1}"#,
     printcolumn = r#"{"name":"Ready","type":"string","jsonPath":".status.conditions[?(@.type==\"Ready\")].status"}"#,
     printcolumn = r#"{"name":"Violations","type":"integer","jsonPath":".status.violations"}"#,
     printcolumn = r#"{"name":"Age","type":"date","jsonPath":".metadata.creationTimestamp"}"#
@@ -49,6 +50,11 @@ pub struct ClusterGatePolicyStatus {
     /// Standard conditions. `Ready` is `True` when the policy is valid and active.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub conditions: Vec<Condition>,
+
+    /// Who enforces the policy at admission: `Webhook`, or `Native` through the generated
+    /// `ValidatingAdmissionPolicy` named in the `Ready` condition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enforcement: Option<Enforcement>,
 
     /// Number of existing resources that fail the policy, from the last background scan.
     #[serde(default, skip_serializing_if = "Option::is_none")]

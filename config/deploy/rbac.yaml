@@ -29,6 +29,10 @@ rules:
   - apiGroups: [""]
     resources: [namespaces]
     verbs: [list, watch]
+  # Native enforcement: the generated ValidatingAdmissionPolicy and binding per policy.
+  - apiGroups: [admissionregistration.k8s.io]
+    resources: [validatingadmissionpolicies, validatingadmissionpolicybindings]
+    verbs: [get, create, patch, delete]
 ---
 # Read access for background scans. Aggregated: to scan more kinds, create a ClusterRole with the
 # label below (see docs/rbac.md).

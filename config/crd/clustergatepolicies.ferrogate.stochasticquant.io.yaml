@@ -23,6 +23,10 @@ spec:
     - jsonPath: .spec.severity
       name: Severity
       type: string
+    - jsonPath: .spec.enforcement
+      name: Enforcement
+      priority: 1
+      type: string
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
       name: Ready
       type: string
@@ -40,6 +44,13 @@ spec:
           spec:
             description: A cluster-wide policy that Ferrogate audits or enforces.
             properties:
+              enforcement:
+                default: Webhook
+                description: "`Webhook` (default) or `Native` (compiled to a `ValidatingAdmissionPolicy`)."
+                enum:
+                - Webhook
+                - Native
+                type: string
               exclude:
                 description: Resources and requesters to skip.
                 nullable: true
@@ -403,6 +414,13 @@ spec:
                   - type
                   type: object
                 type: array
+              enforcement:
+                description: Who evaluates a policy at admission time.
+                enum:
+                - Webhook
+                - Native
+                nullable: true
+                type: string
               lastScanTime:
                 description: When the last background scan finished (RFC 3339).
                 nullable: true

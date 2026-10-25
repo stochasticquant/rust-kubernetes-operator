@@ -225,8 +225,9 @@ Engine (`ferrogate-core`)
 
 Controller (`ferrogate-operator`)
 - [x] Reconcile policies: validate, compile, write `status.conditions`, emit Kubernetes Events.
-- [ ] Finalizers to clean up generated VAP objects and reports.
-- [ ] Compile CEL-expressible rules to `ValidatingAdmissionPolicy` + binding; mark the rest for webhook.
+- [x] Clean-up of generated VAP objects (owner references; deleted on switch to Webhook or invalid policy).
+- [x] Compile rules to `ValidatingAdmissionPolicy` + binding (`enforcement: Native`, all-or-nothing per
+      policy; see decision 0005). `allowedRegistries` is webhook-only for now.
 - [x] Background scanner: evaluate existing workloads on a schedule and on policy change; results
       in policy status.
 - [ ] Write `PolicyReport` / `ClusterPolicyReport`.

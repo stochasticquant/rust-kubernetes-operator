@@ -50,6 +50,31 @@ The webhook configuration:
 - uses `failurePolicy: Ignore`: if Ferrogate is down, requests are allowed (see accepted risk R-2
   in the [threat model](security/threat-model.md)). Set `Fail` if you need fail-closed.
 
+## Native enforcement
+
+Set `enforcement: Native` to have the API server enforce a policy itself through a generated
+`ValidatingAdmissionPolicy`: no webhook call, no added latency, and it keeps working while
+Ferrogate is down.
+
+```yaml
+spec:
+  mode: Enforce
+  enforcement: Native
+```
+
+```console
+$ kubectl get cgp -o wide
+NAME             MODE      SEVERITY   ENFORCEMENT   READY   VIOLATIONS   AGE
+pss-restricted   Enforce   High       Native        True    35           1m
+$ kubectl get validatingadmissionpolicy ferrogate-pss-restricted
+```
+
+All built-in checks are supported except `allowedRegistries`; pod checks work on Pods and the
+built-in workload kinds. Unsupported policies report `Ready=False, reason=NativeUnsupported`.
+`Enforce` policies fail closed on CEL evaluation errors (`failurePolicy: Fail`); `Warn` and
+`Audit` never block. Native denials name the rule, not the container or field path. Preview the
+generated objects with `ferrogate native <policy.yaml>`.
+
 ## Configuration
 
 | Flag | Env | Default | |

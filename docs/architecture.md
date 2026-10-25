@@ -43,6 +43,12 @@ Why this split: [decision 0002](decisions/0002-workspace-layout.md).
 
 - **Same engine everywhere.** The webhook, the background scan and `ferrogate check` all call
   `ferrogate_core::decide`, so they cannot disagree.
+- **Native enforcement (opt-in).** With `enforcement: Native` the operator compiles the policy to
+  CEL (`ferrogate_core::native`) and applies a `ValidatingAdmissionPolicy` and binding named
+  `ferrogate-<policy>`, owned by the policy. The API server then enforces it without calling the
+  webhook, which skips native policies. A test dry-runs every pack fixture against the generated
+  policies on a real API server to prove the verdicts match the engine.
+  [Decision 0005](decisions/0005-native-enforcement.md).
 - **Webhook caches.** Policies are watched and compiled once per change; namespaces are watched as
   metadata only. Until both caches have synced, `/readyz` fails and `/validate` answers 503, so the
   API server applies the configured `failurePolicy`.
@@ -64,6 +70,7 @@ Why this split: [decision 0002](decisions/0002-workspace-layout.md).
 | `ferrogate operator` | Runs the controller (flags: `--scan-interval`, `--no-scan`, `--max-scan-objects`, `--metrics-addr`) |
 | `ferrogate webhook` | Runs the admission server on `:8443` (HTTPS) and the operations server on `:8080` |
 | `ferrogate check -p <policies> <resources>` | Evaluates local YAML without a cluster; exit code 1 on failures; `-o json` |
+| `ferrogate native <policies>` | Prints the `ValidatingAdmissionPolicy` and binding the operator would generate (review, GitOps) |
 | `ferrogate crd` | Prints the CRD YAML. `config/crd/` holds the committed copy; CI fails if they differ |
 
 Logging: `--log-format text|json` (or `FERROGATE_LOG_FORMAT`); level via `FERROGATE_LOG`
@@ -80,6 +87,7 @@ metadata:
 spec:
   mode: Warn                 # Audit (default) | Warn | Enforce
   severity: Medium           # Low | Medium (default) | High | Critical
+  enforcement: Webhook       # Webhook (default) | Native (ValidatingAdmissionPolicy)
   match:
     resources:               # required: kinds the policy applies to
       - apiGroups: [apps]    # empty = any group

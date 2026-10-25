@@ -9,6 +9,7 @@
 pub mod cache;
 pub mod leader;
 pub mod metrics;
+mod native;
 pub mod scan;
 
 #[cfg(test)]
@@ -21,6 +22,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
+use ferrogate_core::Enforcement;
 use ferrogate_crd::{ClusterGatePolicy, ClusterGatePolicyStatus};
 use futures::StreamExt;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{Condition, Time};
@@ -185,31 +187,41 @@ async fn reconcile_inner(
     let compiled = match policy.compile() {
         Ok(compiled) => compiled,
         Err(error) => {
-            let message = error.to_string();
-            tracing::warn!(policy = %name, %message, "invalid policy");
-            status.conditions = vec![condition(
-                CONDITION_READY,
-                false,
-                "InvalidPolicy",
-                &message,
-                generation,
+            return reject(
+                ctx,
+                policy,
                 &previous,
-            )];
-            write_status(ctx, &name, &status).await?;
-            ctx.metrics.ready.get_or_create(&labels).set(0);
-            if condition_status(&previous, CONDITION_READY) != Some("False") {
-                publish(ctx, policy, EventType::Warning, "InvalidPolicy", &message).await;
-            }
-            return Ok((Action::await_change(), Outcome::Invalid));
+                status,
+                "InvalidPolicy",
+                &error.to_string(),
+            )
+            .await;
         }
     };
 
-    let summary = format!(
+    let mut summary = format!(
         "{} rule(s), mode {}, severity {}",
         compiled.rules.len(),
         compiled.mode.as_str(),
         compiled.severity.as_str()
     );
+    status.enforcement = Some(compiled.enforcement);
+    match compiled.enforcement {
+        Enforcement::Native => match native::apply(ctx, policy, &compiled).await? {
+            native::Applied::Active(vap) => {
+                summary.push_str(", enforced natively by ValidatingAdmissionPolicy ");
+                summary.push_str(&vap);
+            }
+            native::Applied::Unsupported(reason) => {
+                return reject(ctx, policy, &previous, status, "NativeUnsupported", &reason).await;
+            }
+        },
+        Enforcement::Webhook => {
+            if previous.enforcement == Some(Enforcement::Native) {
+                native::remove(ctx, &name).await?;
+            }
+        }
+    }
     status.conditions.push(condition(
         CONDITION_READY,
         true,
@@ -229,6 +241,41 @@ async fn reconcile_inner(
 
     write_status(ctx, &name, &status).await?;
     Ok((Action::requeue(ctx.config.scan_interval), Outcome::Active))
+}
+
+/// Marks the policy `Ready=False` and stops enforcing it. A natively enforced policy loses its
+/// generated `ValidatingAdmissionPolicy`, the same as the webhook ignoring an invalid policy.
+async fn reject(
+    ctx: &Context,
+    policy: &ClusterGatePolicy,
+    previous: &ClusterGatePolicyStatus,
+    mut status: ClusterGatePolicyStatus,
+    reason: &str,
+    message: &str,
+) -> Result<(Action, Outcome), Error> {
+    let name = policy.name_any();
+    tracing::warn!(policy = %name, reason, message, "policy is not active");
+    status.conditions = vec![condition(
+        CONDITION_READY,
+        false,
+        reason,
+        message,
+        status.observed_generation,
+        previous,
+    )];
+    status.enforcement = None;
+    if previous.enforcement == Some(Enforcement::Native) {
+        native::remove(ctx, &name).await?;
+    }
+    write_status(ctx, &name, &status).await?;
+    ctx.metrics
+        .ready
+        .get_or_create(&metrics::PolicyLabels { policy: name })
+        .set(0);
+    if condition_status(previous, CONDITION_READY) != Some("False") {
+        publish(ctx, policy, EventType::Warning, reason, message).await;
+    }
+    Ok((Action::await_change(), Outcome::Invalid))
 }
 
 /// Runs a background scan and records the result in `status`, metrics and events.

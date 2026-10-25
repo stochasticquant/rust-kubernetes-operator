@@ -80,3 +80,24 @@ fn samples_are_valid_policies() {
     let policies = check::policies(&docs).unwrap();
     assert_ne!(policies.len(), 0, "no sample policies found");
 }
+
+#[test]
+fn every_pack_compiles_to_native_admission() {
+    use ferrogate_core::native;
+    let docs = check::load(&[packs_dir()]).unwrap();
+    let policies = check::policies(&docs).unwrap();
+    assert!(policies.len() >= 3);
+    for policy in &policies {
+        let compiled =
+            native::compile_native(policy).unwrap_or_else(|e| panic!("{}: {e}", policy.name));
+        assert_eq!(compiled.validations.len(), policy.rules.len());
+        let resolve = |groups: &[String], kind: &str| {
+            native::builtin_resource(kind)
+                .filter(|t| groups.is_empty() || groups.contains(&t.group))
+                .into_iter()
+                .collect::<Vec<_>>()
+        };
+        native::render(policy, &compiled, &resolve, None)
+            .unwrap_or_else(|e| panic!("{}: {e}", policy.name));
+    }
+}

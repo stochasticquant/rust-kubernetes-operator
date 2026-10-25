@@ -12,6 +12,7 @@ The manifests are in [`config/deploy/rbac.yaml`](../config/deploy/rbac.yaml).
 | `ferrogate.stochasticquant.io` | `clustergatepolicies/status` | get, patch, update | Write conditions and scan results |
 | `events.k8s.io` | `events` | create, patch | Report transitions as Kubernetes Events |
 | `""` | `namespaces` | list, watch | Namespace labels for `namespaceSelector` (metadata only) |
+| `admissionregistration.k8s.io` | `validatingadmissionpolicies`, `validatingadmissionpolicybindings` | get, create, patch, delete | Generated objects for `enforcement: Native` (named `ferrogate-<policy>`, owned by the policy) |
 | via `ferrogate-scan` | workload kinds (below) | list | Background scans |
 | `coordination.k8s.io` (Role in `ferrogate-system`) | `leases` | create; get, update on `ferrogate-operator` only | Leader election |
 
@@ -48,3 +49,10 @@ namespace, name, rule, message and field path.
 
 The webhook receives objects from the API server in `AdmissionReview` requests; it needs no read
 access to workloads.
+
+## What the operator can do with these rights
+
+Creating `ValidatingAdmissionPolicy` objects lets the operator add admission rules, so a
+compromised operator could deny requests cluster-wide. That is no more than the webhook can
+already do. Kubernetes cannot restrict `create` by object name, so this is documented as threat
+T-16 rather than prevented by RBAC.
