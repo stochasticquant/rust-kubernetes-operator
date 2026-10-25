@@ -263,7 +263,7 @@ Testing
 
 Packaging
 - [x] Multi-stage `Dockerfile` → distroless, non-root UID, read-only root filesystem.
-- [ ] Multi-arch (amd64, arm64) via `docker buildx`.
+- [x] Multi-arch (amd64, arm64) via `docker buildx` (release image from the static release binaries).
 - [x] Helm chart in `charts/`: values schema (`values.schema.json`), PodDisruptionBudget,
       anti-affinity, resource requests/limits, NetworkPolicy, ServiceMonitor, cert-manager. CI lints,
       renders, rejects invalid values and runs the e2e test with the chart.
@@ -273,19 +273,23 @@ Packaging
 Security and supply chain
 - [x] Least-privilege `ClusterRole` per component; document each permission in `docs/rbac.md`.
 - [ ] `cargo deny` (licenses, advisories, bans), `cargo audit`, Trivy/Grype image scanning.
-- [ ] Sign images and charts with cosign (keyless, GitHub OIDC); attach SBOM (syft) and SLSA
-      provenance (`slsa-github-generator`).
+- [x] Sign images and charts with cosign (keyless, GitHub OIDC); SBOM and SLSA provenance
+      attestations from buildx and `actions/attest-build-provenance` (in `release.yml`, not yet run
+      for a real tag).
 - [x] Renovate or Dependabot for Cargo, GitHub Actions and the Dockerfile; pin actions by SHA.
 - [ ] OpenSSF Scorecard workflow and badge; aim for the OpenSSF Best Practices badge.
 - [x] Threat model in `docs/security/threat-model.md`.
 
 Releases (tag-driven, like WorriorVex)
-- [ ] Pushing `vX.Y.Z` runs: tests → binaries (linux/macOS/windows, amd64/arm64) → image → chart →
-      `kubectl-ferrogate` → GitHub release with checksums, SBOM and signatures.
+- [x] Pushing `vX.Y.Z` runs: version checks → binaries (linux amd64/arm64 static, macOS arm64) →
+      e2e on kind with the release binary → signed multi-arch image → signed OCI chart → draft
+      GitHub release with checksums and an install manifest pinned by digest.
+- [ ] Windows binary and `kubectl-ferrogate`.
 - [ ] `release-plz` (or `cargo-dist`) generates the changelog from Conventional Commits and bumps versions.
 - [ ] Distribute the CLI through Krew and a Homebrew tap.
-- [ ] Version shown in `ferrogate --version` and logs comes from the tag.
-- [ ] `docs/release.md` describing the process and what is built.
+- [x] Version shown in `ferrogate --version` and logs comes from the tag (the workflow refuses tags
+      that differ from `Cargo.toml` and `Chart.yaml`).
+- [x] `docs/release.md` describing the process and what is built.
 
 Operations
 - [ ] `docs/operations/`: upgrade guide, HA setup, sizing, failure modes, runbooks for common alerts.

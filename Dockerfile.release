@@ -1,0 +1,14 @@
+# syntax=docker/dockerfile:1
+# Release image: packages the static release binaries built (and attested) by the release
+# workflow, so the image contains exactly the binaries published on the GitHub release.
+# Build context must contain dist/<arch>/ferrogate for each target architecture.
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+ARG TARGETARCH
+LABEL org.opencontainers.image.title="ferrogate" \
+      org.opencontainers.image.description="Rust-native Kubernetes policy operator and admission webhook" \
+      org.opencontainers.image.source="https://github.com/stochasticquant/rust-kubernetes-operator" \
+      org.opencontainers.image.licenses="Apache-2.0"
+COPY --chmod=0755 dist/${TARGETARCH}/ferrogate /usr/local/bin/ferrogate
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/ferrogate"]
+CMD ["--help"]
