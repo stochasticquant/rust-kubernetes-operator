@@ -54,6 +54,7 @@ metadata:
   name: ferrogate-operator
   namespace: ferrogate-system
 spec:
-  minAvailable: 1
+  # maxUnavailable (not minAvailable) so a single replica never blocks node drains.
+  maxUnavailable: 1
   selector:
     matchLabels: {app.kubernetes.io/name: ferrogate, app.kubernetes.io/component: operator}
