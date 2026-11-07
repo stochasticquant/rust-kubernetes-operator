@@ -133,7 +133,7 @@ jobs:
           path: dist/
       - name: Build the release image for amd64
         run: docker build -f Dockerfile.release --build-arg TARGETARCH=amd64 -t ferrogate:dev .
-      - uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
+      - uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
         with:
           cluster_name: ferrogate
       - name: Install cert-manager
@@ -192,7 +192,7 @@ jobs:
           provenance: mode=max
           sbom: true
       - if: env.PUBLISH == 'true'
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
       - name: Sign the image (keyless)
         if: env.PUBLISH == 'true'
         run: cosign sign --yes "${IMAGE}@${{ steps.build.outputs.digest }}"
@@ -221,7 +221,7 @@ jobs:
           helm lint --strict charts/ferrogate
           helm package charts/ferrogate --destination dist
       - if: env.PUBLISH == 'true'
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
       - name: Push and sign
         if: env.PUBLISH == 'true'
         env:
