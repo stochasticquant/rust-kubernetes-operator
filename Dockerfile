@@ -4,7 +4,7 @@
 # - Runtime: distroless (no shell, no package manager), non-root user 65532.
 # Base images are pinned by digest; Dependabot proposes updates.
 
-FROM rust:1.99-slim-bookworm@sha256:86234e857a413004348b471d11a4ebe1aa92d2eae2b6b143cac68fd1ac3c48be AS build
+FROM rust:1.100-slim-bookworm@sha256:7c7d4eb4d05b7781187a327809466cfddf29753f6defdc3d19a0e291951b7a37 AS build
 WORKDIR /src
 COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
